@@ -34,12 +34,14 @@ def call_llm(messages: list[dict], system_prompt: str = "") -> str:
             text_block += f"Instructions: {system_prompt}\n\n"
         for m in messages:
             text_block += f"{m['role']}: {m['content']}\n"
-
-        response = gemini_client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=text_block,
-        )
-        return response.text
+        try:
+            response = gemini_client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=text_block,
+            )
+            return response.text
+        except Exception as e2:
+            raise RuntimeError(f"Both providers failed. Groq: {e}. Gemini: {e2}")
 
 
 if __name__ == "__main__":
