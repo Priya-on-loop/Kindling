@@ -45,7 +45,26 @@ def call_llm(messages: list[dict], system_prompt: str = "") -> str:
 
 
 if __name__ == "__main__":
-    reply = call_llm(
-        messages=[{"role": "user", "content": "Say hello in one short sentence."}]
-    )
-    print("Reply:", reply)
+    print("--- Smoke test: Groq directly ---")
+    try:
+        r = groq_client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[{"role": "user", "content": "Say hello in one short sentence."}],
+        )
+        print("Groq OK:", r.choices[0].message.content)
+    except Exception as e:
+        print("Groq FAILED:", e)
+
+    print("\n--- Smoke test: Gemini directly ---")
+    try:
+        r = gemini_client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents="Say hello in one short sentence.",
+        )
+        print("Gemini OK:", r.text)
+    except Exception as e:
+        print("Gemini FAILED:", e)
+
+    print("\n--- Smoke test: call_llm() wrapper ---")
+    reply = call_llm(messages=[{"role": "user", "content": "Say hello in one short sentence."}])
+    print("Wrapper reply:", reply)
