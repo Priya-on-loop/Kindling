@@ -1,5 +1,18 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# Database files
+*.db
+*.sqlite3
+
+# Secrets & Keys
 .env
+
+# Python Cache
 __pycache__/
 *.pyc
-*.db
+
+# IDE Settings
 .vscode/
