@@ -7,6 +7,10 @@ from call_llm import call_llm
 # v3 (14 Sep) - added 4 more few-shot examples so all 6 dimensions are demonstrated as a
 #               dominant signal at least once; added float/range validation to schema check;
 #               fallback vector now flags itself as a failure, not a genuine neutral score
+# v4 (14 Sep) - fixed injection defense: attack-text structure/tone was being scored as a
+#               false signal (organizes_systems 0.8, leads_persuades 0.6 on a pure attack
+#               attempt); now explicitly excluded, confirmed flat 0.05 across all 6 on retest
+
 
 SYSTEM_PROMPT = """You read a conversation transcript between a career-exploration assistant and a student, and score the student's likely interests across 6 dimensions based on HOW they communicate and what they show curiosity about - not just what they explicitly say they like.
 
