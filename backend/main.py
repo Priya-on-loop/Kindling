@@ -1,8 +1,9 @@
 """
 Kindling – Chat / Intake API
 Endpoints:
-  POST /api/chat/start   → { session_id, opening_question }
-  POST /api/chat/message → { reply, question_index, total_questions }
+  POST /api/chat/start                    → { session_id, opening_question }
+  POST /api/chat/message                  → { reply, question_index, total_questions }
+  GET  /api/chat/session/{session_id}     → { session_id, total_messages, user_messages_count, transcript }
 """
 
 import sys
@@ -49,8 +50,8 @@ Rules:
 - Output ONLY the question — no preamble, no commentary."""
 
 CLOSING_MESSAGE = (
-    "Thanks for sharing all of that — I've got a good sense of what draws "
-    "you in. Head over to the Inference page to see what we noticed."
+    "Thanks for sharing all of that. I've got a good sense of what draws "
+    "you in."
 )
 
 # ── FastAPI App Setup ─────────────────────────────────────────
