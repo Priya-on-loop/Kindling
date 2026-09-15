@@ -107,7 +107,6 @@ def chat_start() -> StartResponse:
         opening_question=OPENING_QUESTION,
     )
 
-
 @app.post("/api/chat/message", response_model=MessageResponse)
 def chat_message(req: MessageRequest) -> MessageResponse:
     """Accepts a user message, logs it, and returns the next LLM follow-up or closing message."""
@@ -133,7 +132,10 @@ def chat_message(req: MessageRequest) -> MessageResponse:
 
     # 5. Generate LLM follow-up using Sruthi's real wrapper
     history = get_messages(req.session_id)
-    reply = call_llm(messages=history, system_prompt=FOLLOWUP_SYSTEM_PROMPT)
+    try:
+        reply = call_llm(messages=history, system_prompt=FOLLOWUP_SYSTEM_PROMPT)
+    except RuntimeError:
+        reply = "Sorry, I'm having trouble responding right now — try again in a moment."
 
     # 6. Log assistant follow-up
     add_message(req.session_id, "assistant", reply)

@@ -1,8 +1,9 @@
 import sqlite3
 import uuid
 from datetime import datetime, timezone
+import os
 
-DB_PATH = "kindling.db"
+DB_PATH = os.path.join(os.path.dirname(__file__), "kindling.db")
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
