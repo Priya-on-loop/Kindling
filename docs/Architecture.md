@@ -19,20 +19,38 @@ Kindling is built on a modular 6-layer architecture designed for high uptime, cl
 
 To guarantee zero downtime during API outages or rate limits, the LLM client executes an automatic failover strategy:
 
-[User Dialogue Input]
-│
-▼
-[Backend API]
-│
-▼
-[call_llm.py] ───(1. Primary Attempt)───► [Groq API: gpt-oss-120b]
-│ │
-│ (On Exception / Timeout) │ (Success)
-▼ ▼
-[2. Fallback] ───────────────────────────► [Return Output String]
-│
-▼
-[Gemini API: gemini-3.6-flash]
+       ┌────────────────────────┐
+       │  User Dialogue Input   │
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │   Backend Session API  │
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │      call_llm.py       │
+       └───────────┬────────────┘
+                   │
+         ┌─────────┴─────────┐
+         │ (1. Primary)      │
+         ▼                   ▼
+┌─────────────────┐    (On Exception / Timeout)
+│    Groq API     │          │
+│ (gpt-oss-120b)  │          ▼
+└────────┬────────┘   ┌───────────────────┐
+         │            │   (2. Fallback)   │
+         │ (Success)  │    Gemini API     │
+         │            │(gemini-3.6-flash) │
+         │            └─────────┬─────────┘
+         │                      │
+         └──────────┬───────────┘
+                    │
+                    ▼
+       ┌────────────────────────┐
+       │  Return Output String  │
+       └────────────────────────┘
 
 
 ---
