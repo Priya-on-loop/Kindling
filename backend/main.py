@@ -3,6 +3,7 @@ Kindling – Chat / Intake API
 Endpoints:
   POST /api/chat/start   → { session_id, opening_question }
   POST /api/chat/message → { reply, question_index, total_questions }
+  GET /api/chat/session/{session_id} → { history, user_count }
 """
 
 import sys
