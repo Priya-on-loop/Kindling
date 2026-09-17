@@ -1,4 +1,4 @@
-## 4. API Response Scoring Benchmarks
+## API Response Scoring Benchmarks
 
 The `/session/message` endpoint processes natural dialogue payloads and returns a calibrated `scores` object. To verify endpoint response accuracy, the API was tested against single-dimension high-signal input dialogue payloads.
 
