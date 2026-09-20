@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # 2. Import DB helpers and Sruthi's real LLM wrapper
-from db import (
+from backend.db import (
     init_db,
     create_session,
     add_message,
@@ -27,6 +27,7 @@ from db import (
     count_user_messages,
     session_exists,
 )
+from backend.shap_explainer import explain_match
 from call_llm import call_llm
 
 # ── Constants ─────────────────────────────────────────────────
@@ -159,3 +160,31 @@ def get_session_history(session_id: str):
         "user_messages_count": user_count,
         "transcript": history,
     }
+class ExplainMatchRequest(BaseModel):
+    student_vector: list[float]
+    occupation_id: str
+
+
+@app.post("/api/matching/explain")
+def explain_matching(req: ExplainMatchRequest):
+    """Return SHAP contribution scores for a specific occupation match."""
+
+    if len(req.student_vector) != 6:
+        raise HTTPException(
+            status_code=400,
+            detail="student_vector must contain exactly 6 values"
+        )
+
+    try:
+        result = explain_match(
+            req.student_vector,
+            req.occupation_id
+        )
+
+        return result
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=404,
+            detail=str(error)
+        )
