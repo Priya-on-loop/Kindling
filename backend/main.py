@@ -29,7 +29,7 @@ from db import (
     session_exists,
 )
 from call_llm import call_llm
-
+from score_session import score_session
 # ── Constants ─────────────────────────────────────────────────
 
 OPENING_QUESTION = "What have you been curious about lately — even something small?"
@@ -126,13 +126,23 @@ def chat_message(req: MessageRequest) -> MessageResponse:
     question_index = count_user_messages(req.session_id)
 
     # 4. Check if we reached the question cap
-    if question_index >= TOTAL_QUESTIONS:
-        add_message(req.session_id, "assistant", CLOSING_MESSAGE)
-        return MessageResponse(
-            reply=CLOSING_MESSAGE,
-            question_index=TOTAL_QUESTIONS,
-            total_questions=TOTAL_QUESTIONS,
-        )
+        if question_index >= TOTAL_QUESTIONS:
+            add_message(req.session_id, "assistant", CLOSING_MESSAGE)
+
+            # Session complete - score it now.
+            # NOTE for Priya: this computes real RIASEC scores, but there's
+            # nowhere in db.py's schema yet to store them. Needs a decision
+            # on your end - new column on sessions, or a separate scores
+            # table. Logged here for now so nothing is silently lost.
+            full_transcript = get_messages(req.session_id)
+            scores = score_session(full_transcript)
+            print(f"[session {req.session_id}] scored: {scores}")
+
+            return MessageResponse(
+                reply=CLOSING_MESSAGE,
+                question_index=TOTAL_QUESTIONS,
+                total_questions=TOTAL_QUESTIONS,
+            )
 
     # 5. Generate LLM follow-up using Sruthi's real wrapper
     history = get_messages(req.session_id)
