@@ -1,0 +1,380 @@
+/* =========================================
+   USER CONTROL
+========================================= */
+
+.user-control-page {
+    min-height: 100vh;
+}
+
+
+/* =========================================
+   HERO
+========================================= */
+
+.user-control-hero {
+    padding: var(--space-24) 0 var(--space-16);
+}
+
+.user-control-eyebrow,
+.section-label {
+    color: var(--color-primary);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.user-control-hero h1 {
+    margin-top: var(--space-4);
+    font-size: clamp(3rem, 7vw, 5.5rem);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: -0.045em;
+}
+
+.user-control-intro {
+    margin-top: var(--space-6);
+    max-width: 620px;
+    color: var(--color-text-secondary);
+    font-size: var(--text-lg);
+    line-height: 1.7;
+}
+
+
+/* =========================================
+   SECTIONS
+========================================= */
+
+.user-control-section {
+    padding: var(--space-16) 0;
+}
+
+.section-heading {
+    margin-bottom: var(--space-8);
+}
+
+.section-heading h2 {
+    margin-top: var(--space-3);
+    font-size: var(--text-3xl);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: -0.025em;
+}
+
+.section-heading > p:last-child {
+    margin-top: var(--space-4);
+    color: var(--color-text-secondary);
+}
+
+
+/* =========================================
+   ACTIVITY CARDS
+========================================= */
+
+.activity-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-4);
+}
+
+.activity-card {
+    min-height: 190px;
+    padding: var(--space-6);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+
+    transition:
+        border-color var(--transition-normal),
+        transform var(--transition-normal);
+}
+
+.activity-card:hover {
+    border-color: var(--color-border-light);
+    transform: translateY(-2px);
+}
+
+.activity-icon {
+    width: 40px;
+    height: 40px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-md);
+
+    color: var(--color-primary);
+    font-size: var(--text-lg);
+}
+
+.activity-label {
+    display: block;
+    margin-bottom: var(--space-2);
+
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+}
+
+.activity-value {
+    display: block;
+
+    color: var(--color-text-primary);
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-semibold);
+}
+
+
+/* =========================================
+   HISTORY
+========================================= */
+
+.history-list {
+    border-top: 1px solid var(--color-border);
+}
+
+.history-item {
+    display: grid;
+    grid-template-columns: 60px 1fr auto;
+    align-items: center;
+    gap: var(--space-6);
+
+    padding: var(--space-6) 0;
+
+    border-bottom: 1px solid var(--color-border);
+
+    transition: padding var(--transition-normal);
+}
+
+.history-number {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+.history-content h3 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+}
+
+.history-content p {
+    margin-top: var(--space-2);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+}
+
+.history-arrow {
+    color: var(--color-primary);
+    font-size: var(--text-xl);
+}
+
+
+/* =========================================
+   PROFILE
+========================================= */
+
+.profile-section {
+    padding-bottom: var(--space-24);
+}
+
+.profile-card {
+    overflow: hidden;
+
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+}
+
+.profile-card-header {
+    padding: var(--space-8);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.profile-card-label {
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.profile-card-header h3 {
+    margin-top: var(--space-2);
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-semibold);
+}
+
+.profile-pattern {
+    min-height: 88px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: var(--space-5) var(--space-8);
+
+    border-bottom: 1px solid var(--color-border);
+}
+
+.profile-pattern:last-child {
+    border-bottom: none;
+}
+
+.profile-pattern-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+}
+
+.pattern-index {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+}
+
+.profile-pattern strong {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.02em;
+}
+
+.profile-pattern p {
+    margin-top: var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+}
+
+.profile-edit {
+    padding: var(--space-2) var(--space-4);
+
+    color: var(--color-text-secondary);
+    background: transparent;
+
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-full);
+
+    font-size: var(--text-sm);
+
+    transition:
+        color var(--transition-fast),
+        border-color var(--transition-fast),
+        background var(--transition-fast);
+}
+
+.profile-edit:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: rgba(200, 241, 105, 0.05);
+}
+
+
+/* =========================================
+   CONTROL MESSAGE
+========================================= */
+
+.control-message {
+    padding: var(--space-20) 0;
+
+    background: var(--color-bg-secondary);
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.control-message-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-16);
+    align-items: center;
+}
+
+.control-message h2 {
+    margin-top: var(--space-4);
+
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: -0.035em;
+}
+
+.control-message-inner > p {
+    color: var(--color-text-secondary);
+    font-size: var(--text-lg);
+    line-height: 1.8;
+}
+
+
+/* =========================================
+   RESPONSIVE
+========================================= */
+
+@media (max-width: 900px) {
+
+    .activity-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .control-message-inner {
+        grid-template-columns: 1fr;
+        gap: var(--space-8);
+    }
+
+}
+
+
+@media (max-width: 600px) {
+
+    .user-control-hero {
+        padding: var(--space-16) 0 var(--space-10);
+    }
+
+    .user-control-section {
+        padding: var(--space-10) 0;
+    }
+
+    .activity-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .activity-card {
+        min-height: 150px;
+    }
+
+    .history-item {
+        grid-template-columns: 35px 1fr auto;
+        gap: var(--space-3);
+    }
+
+    .history-content p {
+        font-size: var(--text-xs);
+    }
+
+    .profile-card-header {
+        padding: var(--space-6);
+    }
+
+    .profile-pattern {
+        padding: var(--space-5);
+    }
+
+    .profile-pattern-info {
+        gap: var(--space-3);
+    }
+
+    .pattern-index {
+        display: none;
+    }
+
+    .profile-pattern strong {
+        font-size: var(--text-xs);
+    }
+
+    .profile-pattern p {
+        font-size: var(--text-xs);
+    }
+
+    .control-message {
+        padding: var(--space-12) 0;
+    }
+
+}
