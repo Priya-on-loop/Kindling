@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>User Control — Kindling</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="../css/main.css">
+</head>
+
+<body>
+
+<header class="navbar">
+    <div class="container navbar-container">
+
+        <a href="../index.html" class="navbar-logo" aria-label="Kindling home">
+            <span class="navbar-logo-mark"></span>
+            <span>KINDLING</span>
+        </a>
+
+        <nav class="navbar-links" aria-label="Main navigation">
+            <a href="./signals.html" class="navbar-link">Signals</a>
+            <a href="./inference.html" class="navbar-link">Inference</a>
+            <a href="./career-graph.html" class="navbar-link">Career Graph</a>
+            <a href="./user-control.html" class="navbar-link active">User Control</a>
+            <a href="./about.html" class="navbar-link">About</a>
+        </nav>
+
+        <button type="button" class="navbar-action" id="signInButton">
+            Sign in
+        </button>
+
+        <button
+            class="navbar-menu-button"
+            type="button"
+            aria-label="Open navigation menu"
+            aria-expanded="false"
+        >
+            <span class="navbar-menu-icon">
+                <span></span>
+                <span></span>
+                <span></span>
+            </span>
+        </button>
+
+    </div>
+</header>
+
+
+<main class="user-control-page">
+
+    <!-- HERO -->
+    <section class="user-control-hero">
+        <div class="container">
+
+            <p class="user-control-eyebrow">
+                USER CONTROL
+            </p>
+
+            <h1>
+                You're in control.
+            </h1>
+
+            <p class="user-control-intro">
+                Kindling learns from your exploration, but you decide
+                what becomes part of your profile.
+            </p>
+
+        </div>
+    </section>
+
+
+    <!-- EXPLORATION ACTIVITY -->
+    <section class="user-control-section">
+
+        <div class="container">
+
+            <div class="section-heading">
+                <p class="section-label">
+                    YOUR EXPLORATION
+                </p>
+
+                <h2>
+                    What you've been exploring
+                </h2>
+            </div>
+
+
+            <div class="activity-grid">
+
+                <article class="activity-card">
+
+                    <div class="activity-icon">
+                        ↗
+                    </div>
+
+                    <div>
+                        <span class="activity-label">
+                            Activities explored
+                        </span>
+
+                        <strong class="activity-value">
+                            12
+                        </strong>
+                    </div>
+
+                </article>
+
+
+                <article class="activity-card">
+
+                    <div class="activity-icon">
+                        ?
+                    </div>
+
+                    <div>
+                        <span class="activity-label">
+                            Questions explored
+                        </span>
+
+                        <strong class="activity-value">
+                            27
+                        </strong>
+                    </div>
+
+                </article>
+
+
+                <article class="activity-card">
+
+                    <div class="activity-icon">
+                        ◷
+                    </div>
+
+                    <div>
+                        <span class="activity-label">
+                            Time exploring
+                        </span>
+
+                        <strong class="activity-value">
+                            2h 34m
+                        </strong>
+                    </div>
+
+                </article>
+
+
+                <article class="activity-card">
+
+                    <div class="activity-icon">
+                        ↻
+                    </div>
+
+                    <div>
+                        <span class="activity-label">
+                            Returned to explore
+                        </span>
+
+                        <strong class="activity-value">
+                            5 times
+                        </strong>
+                    </div>
+
+                </article>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- EXPLORATION HISTORY -->
+    <section class="user-control-section">
+
+        <div class="container">
+
+            <div class="section-heading">
+                <p class="section-label">
+                    EXPLORATION HISTORY
+                </p>
+
+                <h2>
+                    Your recent exploration
+                </h2>
+            </div>
+
+
+            <div class="history-list">
+
+                <article class="history-item">
+
+                    <div class="history-number">
+                        01
+                    </div>
+
+                    <div class="history-content">
+
+                        <h3>
+                            Software & Technology
+                        </h3>
+
+                        <p>
+                            Explored how applications are built and how
+                            different systems work together.
+                        </p>
+
+                    </div>
+
+                    <span class="history-arrow">
+                        →
+                    </span>
+
+                </article>
+
+
+                <article class="history-item">
+
+                    <div class="history-number">
+                        02
+                    </div>
+
+                    <div class="history-content">
+
+                        <h3>
+                            Design & Creativity
+                        </h3>
+
+                        <p>
+                            Explored visual design, creative tools and
+                            different ways of expressing ideas.
+                        </p>
+
+                    </div>
+
+                    <span class="history-arrow">
+                        →
+                    </span>
+
+                </article>
+
+
+                <article class="history-item">
+
+                    <div class="history-number">
+                        03
+                    </div>
+
+                    <div class="history-content">
+
+                        <h3>
+                            Problem Solving
+                        </h3>
+
+                        <p>
+                            Explored different approaches to breaking down
+                            and solving complex problems.
+                        </p>
+
+                    </div>
+
+                    <span class="history-arrow">
+                        →
+                    </span>
+
+                </article>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- PROFILE CONTROL -->
+    <section class="user-control-section profile-section">
+
+        <div class="container">
+
+            <div class="section-heading">
+
+                <p class="section-label">
+                    YOUR PROFILE
+                </p>
+
+                <h2>
+                    What Kindling has inferred
+                </h2>
+
+                <p>
+                    These patterns are suggestions based on your exploration.
+                    You can change or remove them at any time.
+                </p>
+
+            </div>
+
+
+            <div class="profile-card">
+
+                <div class="profile-card-header">
+
+                    <div>
+                        <span class="profile-card-label">
+                            CURRENT PROFILE
+                        </span>
+
+                        <h3>
+                            Your exploration patterns
+                        </h3>
+                    </div>
+
+                </div>
+
+
+                <div class="profile-patterns">
+
+                    <div class="profile-pattern">
+
+                        <div class="profile-pattern-info">
+                            <span class="pattern-index">01</span>
+
+                            <div>
+                                <strong>BUILD & TINKER</strong>
+                                <p>Showing up often</p>
+                            </div>
+                        </div>
+
+                        <button
+                            class="profile-edit"
+                            type="button"
+                            data-pattern="Build & Tinker"
+                        >
+                            Edit
+                        </button>
+
+                    </div>
+
+
+                    <div class="profile-pattern">
+
+                        <div class="profile-pattern-info">
+                            <span class="pattern-index">02</span>
+
+                            <div>
+                                <strong>INVESTIGATES WHY</strong>
+                                <p>Showing up often</p>
+                            </div>
+                        </div>
+
+                        <button
+                            class="profile-edit"
+                            type="button"
+                            data-pattern="Investigates Why"
+                        >
+                            Edit
+                        </button>
+
+                    </div>
+
+
+                    <div class="profile-pattern">
+
+                        <div class="profile-pattern-info">
+                            <span class="pattern-index">03</span>
+
+                            <div>
+                                <strong>CREATE & EXPRESS</strong>
+                                <p>Showing up</p>
+                            </div>
+                        </div>
+
+                        <button
+                            class="profile-edit"
+                            type="button"
+                            data-pattern="Create & Express"
+                        >
+                            Edit
+                        </button>
+
+                    </div>
+
+
+                    <div class="profile-pattern">
+
+                        <div class="profile-pattern-info">
+                            <span class="pattern-index">04</span>
+
+                            <div>
+                                <strong>WORKS WITH PEOPLE</strong>
+                                <p>Starting to appear</p>
+                            </div>
+                        </div>
+
+                        <button
+                            class="profile-edit"
+                            type="button"
+                            data-pattern="Works With People"
+                        >
+                            Edit
+                        </button>
+
+                    </div>
+
+
+                    <div class="profile-pattern">
+
+                        <div class="profile-pattern-info">
+                            <span class="pattern-index">05</span>
+
+                            <div>
+                                <strong>ORGANIZES SYSTEMS</strong>
+                                <p>Showing up</p>
+                            </div>
+                        </div>
+
+                        <button
+                            class="profile-edit"
+                            type="button"
+                            data-pattern="Organizes Systems"
+                        >
+                            Edit
+                        </button>
+
+                    </div>
+
+
+                    <div class="profile-pattern">
+
+                        <div class="profile-pattern-info">
+                            <span class="pattern-index">06</span>
+
+                            <div>
+                                <strong>LEADS & PERSUADES</strong>
+                                <p>Starting to appear</p>
+                            </div>
+                        </div>
+
+                        <button
+                            class="profile-edit"
+                            type="button"
+                            data-pattern="Leads & Persuades"
+                        >
+                            Edit
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- CONTROL MESSAGE -->
+    <section class="control-message">
+
+        <div class="container">
+
+            <div class="control-message-inner">
+
+                <div>
+                    <p class="section-label">
+                        YOUR DECISION
+                    </p>
+
+                    <h2>
+                        Kindling suggests.<br>
+                        You decide.
+                    </h2>
+                </div>
+
+                <p>
+                    Nothing here is permanent. Review what Kindling has
+                    learned and change anything that doesn't feel right.
+                </p>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</main>
+
+
+<footer class="footer">
+
+    <div class="container footer-container">
+
+        <div class="footer-brand">
+            <a href="../index.html" class="navbar-logo">
+                <span class="navbar-logo-mark"></span>
+                <span>KINDLING</span>
+            </a>
+
+            <p>
+                Explore what fits you.
+            </p>
+        </div>
+
+        <div class="footer-links">
+
+            <a href="./signals.html">Signals</a>
+            <a href="./inference.html">Inference</a>
+            <a href="./career-graph.html">Career Graph</a>
+            <a href="./user-control.html">User Control</a>
+            <a href="./about.html">About</a>
+
+        </div>
+
+    </div>
+
+</footer>
+
+
+<script src="../js/main.js"></script>
+<script src="../js/components/navbar.js"></script>
+<script src="../js/pages/user-control.js"></script>
+
+</body>
+</html>
