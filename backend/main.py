@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 # 1. Locate root folder and load .env BEFORE importing call_llm
 ROOT_DIR = Path(__file__).resolve().parent.parent
-sys.path.append(str(ROOT_DIR))
+sys.path.append(str(ROOT_DIR / "ai_core"))
 load_dotenv(ROOT_DIR / ".env")
 
 from fastapi import FastAPI, HTTPException
