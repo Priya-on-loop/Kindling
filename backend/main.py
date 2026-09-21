@@ -36,6 +36,7 @@ from db import (
 from backend.shap_explainer import explain_match
 from call_llm import call_llm
 from score_session import score_session
+from rag_explanation import get_top_tasks_for_occupation, compose_explanation, validate_explanation
 from matching import match_occupations, load_career_graph
 
 OPENING_QUESTION = "What have you been curious about lately — even something small?"
@@ -310,7 +311,7 @@ def get_match_explanation(session_id: str, occupation_id: str):
     scores = get_latest_inference_scores(session_id)
     if not scores:
         raise HTTPException(
-            status_code=404, 
+            status_code=404,
             detail="Inference scores are not available yet. Please complete the 7-question chat."
         )
 
@@ -324,7 +325,25 @@ def get_match_explanation(session_id: str, occupation_id: str):
     ]
 
     try:
-        explanation = explain_match(student_vector, occupation_id)
-        return {"status": "success", "session_id": session_id, "explanation": explanation}
+        shap_explanation = explain_match(student_vector, occupation_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Explanation generation failed: {str(e)}")
+
+    all_occupations = {occ["id"]: occ for occ in load_career_graph()}
+    occ_record = all_occupations.get(occupation_id)
+
+    narrative = None
+    narrative_validation = None
+    if occ_record:
+        tasks = get_top_tasks_for_occupation(occupation_id)
+        if tasks:
+            narrative = compose_explanation(occ_record["title"], tasks)
+            narrative_validation = validate_explanation(narrative, tasks)
+
+    return {
+        "status": "success",
+        "session_id": session_id,
+        "explanation": shap_explanation,
+        "narrative": narrative,
+        "narrative_validation": narrative_validation,
+    }
