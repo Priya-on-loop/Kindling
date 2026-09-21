@@ -133,13 +133,13 @@ def log_event(session_id: str, event_type: str, event_data: dict = None) -> None
 
 def get_latest_inference_scores(session_id: str) -> dict | None:
     """
-    Retrieves already-computed 6D inference scores for a session from SQLite events table.
-    Avoids re-running LLM scoring.
+    Retrieves the most recent computed or user-updated 6D scores for a session from SQLite events table.
+    Checks 'profile_updated' first (if user edited scores), then 'score_computed'.
     """
     conn = get_db()
     cursor = conn.execute("""
         SELECT event_data FROM events 
-        WHERE session_id = ? AND event_type = 'score_computed'
+        WHERE session_id = ? AND event_type IN ('score_computed', 'profile_updated')
         ORDER BY id DESC LIMIT 1
     """, (session_id,))
     row = cursor.fetchone()
