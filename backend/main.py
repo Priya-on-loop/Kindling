@@ -41,6 +41,15 @@ from matching import match_occupations, load_career_graph
 OPENING_QUESTION = "What have you been curious about lately — even something small?"
 TOTAL_QUESTIONS = 7
 
+REQUIRED_DIMENSIONS = {
+    "builds_tinkers",
+    "investigates_why",
+    "creates_expresses",
+    "works_with_people",
+    "organizes_systems",
+    "leads_persuades",
+}
+
 FOLLOWUP_SYSTEM_PROMPT = """\
 You are a warm, curious guide helping a young adult explore what genuinely \
 interests them. Ask exactly ONE short follow-up question (under 25 words).
@@ -118,14 +127,18 @@ def chat_message(req: MessageRequest) -> MessageResponse:
 
     log_event(req.session_id, "message_sent", {"turn": question_index, "character_count": len(req.message)})
 
+    # Guard: If question cap reached or exceeded
     if question_index >= TOTAL_QUESTIONS:
         add_message(req.session_id, "assistant", CLOSING_MESSAGE)
-        log_event(req.session_id, "session_completed", {"total_turns": TOTAL_QUESTIONS})
 
-        full_transcript = get_messages(req.session_id)
-        scores = score_session(full_transcript)
-        log_event(req.session_id, "score_computed", scores)
-        print(f"[session {req.session_id}] scored & saved: {scores}")
+        # [FIX 1]: ONLY compute scores on turn 7 EXACTLY.
+        # Messages sent AFTER turn 7 will not re-trigger scoring or overwrite user profile edits.
+        if question_index == TOTAL_QUESTIONS:
+            log_event(req.session_id, "session_completed", {"total_turns": TOTAL_QUESTIONS})
+            full_transcript = get_messages(req.session_id)
+            scores = score_session(full_transcript)
+            log_event(req.session_id, "score_computed", scores)
+            print(f"[session {req.session_id}] initial scoring completed & saved: {scores}")
 
         return MessageResponse(reply=CLOSING_MESSAGE, question_index=TOTAL_QUESTIONS, total_questions=TOTAL_QUESTIONS)
 
@@ -162,11 +175,13 @@ def get_inference_scores(session_id: str):
         raise HTTPException(status_code=404, detail="Inference scores are not available yet. Please complete the 7-question chat.")
 
     clean_scores = {k: v for k, v in scores.items() if k != "inference_failed"}
-
+    
+    # [FIX 2]: Explicitly surface inference_failed flag
     return {
         "status": "success",
         "session_id": session_id,
-        "inference": clean_scores
+        "inference": clean_scores,
+        "inference_failed": scores.get("inference_failed", False)
     }
 
 # ── Career Graph API Endpoint ─────────────────────────────────
@@ -218,10 +233,12 @@ def get_user_profile(session_id: str):
 
     clean_scores = {k: v for k, v in scores.items() if k != "inference_failed"}
 
+    # [FIX 2]: Explicitly surface inference_failed flag
     return {
         "status": "success",
         "session_id": session_id,
-        "inference": clean_scores
+        "inference": clean_scores,
+        "inference_failed": scores.get("inference_failed", False)
     }
 
 @app.post("/api/user/profile/update")
@@ -229,13 +246,35 @@ def update_user_profile(req: ProfileUpdateRequest):
     if not session_exists(req.session_id):
         raise HTTPException(status_code=404, detail="Session not found")
 
-    log_event(req.session_id, "profile_updated", req.inference)
+    inf = req.inference
+
+    # [FIX 3]: Require all 6 dimensions
+    missing_keys = REQUIRED_DIMENSIONS - set(inf.keys())
+    if missing_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required dimensions: {list(missing_keys)}. All 6 dimensions must be provided."
+        )
+
+    # [FIX 3]: Validate float range [0.0, 1.0] for all dimensions
+    validated_inference = {}
+    for k in REQUIRED_DIMENSIONS:
+        v = inf[k]
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0.0 or v > 1.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid value for '{k}': {v}. All dimension values must be numbers between 0.0 and 1.0."
+            )
+        validated_inference[k] = float(v)
+
+    # Log validated edit event
+    log_event(req.session_id, "profile_updated", validated_inference)
 
     return {
         "status": "success",
         "session_id": req.session_id,
         "message": "User profile successfully updated",
-        "inference": req.inference
+        "inference": validated_inference
     }
 
 # ── Telemetry & Analytics Endpoints ───────────────────────────
@@ -261,18 +300,13 @@ def get_timeline(session_id: str):
 def get_field_metrics():
     return {"status": "success", "field_summary": get_field_summary()}
 
-# ── SHAP Match Explainer Endpoint (OPTIMIZED) ───────────────────
+# ── SHAP Match Explainer Endpoint ────────────────────────────────
 
 @app.get("/api/chat/explain/{session_id}/{occupation_id}")
 def get_match_explanation(session_id: str, occupation_id: str):
-    """
-    Generates SHAP feature contribution breakdown using the ALREADY-STORED 
-    scores from SQLite (get_latest_inference_scores) instead of re-running the LLM.
-    """
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Read stored scores from SQLite (0 LLM API calls)
     scores = get_latest_inference_scores(session_id)
     if not scores:
         raise HTTPException(
