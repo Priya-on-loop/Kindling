@@ -4,37 +4,80 @@
 <head>
     <meta charset="UTF-8">
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <meta
         name="description"
-        content="Explore your curiosity with Kindling."
+        content="Kindling Signals — explore what you're curious about."
     >
 
     <title>Signals — Kindling</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Google Font -->
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
 
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
         rel="stylesheet"
     >
 
-    <link rel="stylesheet" href="../css/main.css">
+    <!-- Global styles -->
+    <link
+        rel="stylesheet"
+        href="../css/reset.css"
+    >
 
+    <link
+        rel="stylesheet"
+        href="../css/variables.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="../css/main.css"
+    >
+
+    <!-- Signals styles -->
+    <link
+        rel="stylesheet"
+        href="../css/components/navbar.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="../css/components/modal.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="../css/components/signals.css"
+    >
 </head>
+
 
 <body>
 
     <!-- =====================================================
          NAVBAR
-         ===================================================== -->
+    ====================================================== -->
 
     <header class="navbar">
 
         <div class="container navbar-container">
 
+            <!-- Logo -->
             <a
                 href="../index.html"
                 class="navbar-logo"
@@ -45,6 +88,7 @@
             </a>
 
 
+            <!-- Desktop navigation -->
             <nav
                 class="navbar-links"
                 aria-label="Main navigation"
@@ -88,6 +132,7 @@
             </nav>
 
 
+            <!-- Sign in -->
             <button
                 type="button"
                 class="navbar-action"
@@ -97,6 +142,7 @@
             </button>
 
 
+            <!-- Mobile menu -->
             <button
                 class="navbar-menu-button"
                 type="button"
@@ -119,8 +165,8 @@
 
 
     <!-- =====================================================
-         SIGNALS
-         ===================================================== -->
+         SIGNALS PAGE
+    ====================================================== -->
 
     <main class="signals-page">
 
@@ -128,7 +174,10 @@
 
             <div class="signals-container">
 
-                <!-- Welcome state -->
+
+                <!-- =================================================
+                     WELCOME / OPENING QUESTION
+                ================================================== -->
 
                 <div
                     class="signals-welcome"
@@ -147,13 +196,17 @@
                         class="signals-question"
                         id="openingQuestion"
                     >
-                        What have you been exploring lately?
+                        What have you been curious about lately — even
+                        something small?
                     </p>
 
                 </div>
 
 
-                <!-- Conversation -->
+
+                <!-- =================================================
+                     CHAT
+                ================================================== -->
 
                 <div
                     class="chat-container"
@@ -170,7 +223,10 @@
                 </div>
 
 
-                <!-- Input -->
+
+                <!-- =================================================
+                     INPUT
+                ================================================== -->
 
                 <div class="signals-input-area">
 
@@ -214,7 +270,7 @@
                             </span>
 
                             <span id="questionProgress">
-                                Question 1 of 5
+                                Question 1 of 7
                             </span>
 
                         </div>
@@ -222,8 +278,8 @@
                     </form>
 
 
-                    <!-- Loading -->
 
+                    <!-- Loading indicator -->
                     <div
                         class="chat-loading"
                         id="chatLoading"
@@ -247,8 +303,8 @@
 
 
     <!-- =====================================================
-         SIGN IN MODAL
-         ===================================================== -->
+         SIGN-IN MODAL
+    ====================================================== -->
 
     <div
         class="modal"
@@ -256,17 +312,19 @@
         aria-hidden="true"
     >
 
+        <div class="modal-overlay"></div>
+
         <div
             class="modal-content"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="signInTitle"
+            aria-labelledby="signInModalTitle"
         >
 
             <button
                 type="button"
                 class="modal-close"
-                id="modalClose"
+                id="closeSignInModal"
                 aria-label="Close sign in"
             >
                 ×
@@ -275,26 +333,19 @@
 
             <div class="modal-header">
 
-                <div class="modal-logo">
-
-                    <span class="navbar-logo-mark"></span>
-
-                    <span>KINDLING</span>
-
-                </div>
-
+                <p class="modal-eyebrow">
+                    WELCOME BACK
+                </p>
 
                 <h2
                     class="modal-title"
-                    id="signInTitle"
+                    id="signInModalTitle"
                 >
-                    Welcome back.
+                    Sign in to Kindling
                 </h2>
 
-
                 <p class="modal-description">
-                    Continue exploring where your curiosity
-                    can take you.
+                    Continue exploring your interests and patterns.
                 </p>
 
             </div>
@@ -307,17 +358,14 @@
 
                 <div class="form-group">
 
-                    <label
-                        for="email"
-                        class="form-label"
-                    >
+                    <label for="signInEmail">
                         Email
                     </label>
 
                     <input
                         type="email"
-                        id="email"
-                        class="form-input"
+                        id="signInEmail"
+                        name="email"
                         placeholder="you@example.com"
                         required
                     >
@@ -327,17 +375,14 @@
 
                 <div class="form-group">
 
-                    <label
-                        for="password"
-                        class="form-label"
-                    >
+                    <label for="signInPassword">
                         Password
                     </label>
 
                     <input
                         type="password"
-                        id="password"
-                        class="form-input"
+                        id="signInPassword"
+                        name="password"
                         placeholder="Enter your password"
                         required
                     >
@@ -347,23 +392,12 @@
 
                 <button
                     type="submit"
-                    class="modal-submit"
+                    class="button button-primary modal-submit"
                 >
                     Sign in
                 </button>
 
             </form>
-
-
-            <div class="modal-footer">
-
-                Don't have an account?
-
-                <a href="#" id="createAccount">
-                    Create one
-                </a>
-
-            </div>
 
         </div>
 
@@ -371,20 +405,19 @@
 
 
 
-    <script src="../js/components/navbar.js"></script>
-
-    <script src="../js/components/modal.js"></script>
+    <!-- =====================================================
+         SIGNALS JAVASCRIPT
+    ====================================================== -->
 
     <script src="../js/pages/signals.js"></script>
 
+
     <script>
+        document.addEventListener("DOMContentLoaded", () => {
 
-        initializeNavbar();
+            initializeSignals();
 
-        initializeModal();
-
-        initializeSignals();
-
+        });
     </script>
 
 </body>
