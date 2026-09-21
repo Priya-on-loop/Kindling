@@ -11,8 +11,9 @@ Review 2 additions (additive only):
   GET  /api/dashboard/timeline/{session_id}→ chronological timeline of user turns and events (TCP-54)
   GET  /api/dashboard/field-summary       → summary of interaction types (TCP-53)
 
-Explainability Addition:
-  GET  /api/chat/explain/{session_id}/{occupation_id} → SHAP breakdown of score contributions
+Gokul Frontend Contracts:
+  GET  /api/chat/inference/{session_id}           → fetch already-computed 6D scores from SQLite
+  GET  /api/chat/explain/{session_id}/{occ_id}   → SHAP breakdown of score contributions
 """
 
 import sys
@@ -41,11 +42,11 @@ from db import (
     get_messages,
     count_user_messages,
     session_exists,
-    # Review 2 Additions
     log_event,
     get_dashboard_metrics,
-    get_session_timeline,   # [ADDED]: For TCP-54 timeline endpoint
-    get_field_summary,      # [ADDED]: For TCP-53 field summary endpoint
+    get_session_timeline,
+    get_field_summary,
+    get_latest_inference_scores,  # [ADDED FOR GOKUL]
 )
 from backend.shap_explainer import explain_match
 from call_llm import call_llm
@@ -56,7 +57,6 @@ from score_session import score_session
 OPENING_QUESTION = "What have you been curious about lately — even something small?"
 TOTAL_QUESTIONS = 7
 
-# System prompt for LLM follow-ups (enforces Design Principle #3: No judgment!)
 FOLLOWUP_SYSTEM_PROMPT = """\
 You are a warm, curious guide helping a young adult explore what genuinely \
 interests them. Ask exactly ONE short follow-up question (under 25 words).
@@ -82,7 +82,6 @@ CLOSING_MESSAGE = (
 
 app = FastAPI(title="Kindling Chat API")
 
-# Enable CORS for frontend development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -115,7 +114,6 @@ class MessageResponse(BaseModel):
     total_questions: int
 
 
-# [REVIEW 2]: Request model for custom event logging (TCP-41)
 class EventLogRequest(BaseModel):
     session_id: str
     event_type: str
@@ -127,16 +125,10 @@ class EventLogRequest(BaseModel):
 @app.post("/api/chat/start", response_model=StartResponse)
 def chat_start() -> StartResponse:
     """Creates a new session, logs the opening question, and returns it."""
-    # 1. Generate a new session in SQLite
     session_id = create_session()
-
-    # 2. Store the opening question as an assistant message in DB
     add_message(session_id, "assistant", OPENING_QUESTION)
-
-    # [REVIEW 2] TCP-40 / TCP-41: Log session start event
     log_event(session_id, "session_started", {"source": "api", "max_turns": TOTAL_QUESTIONS})
 
-    # 3. Return the JSON response matching Gokul's contract
     return StartResponse(
         session_id=session_id,
         opening_question=OPENING_QUESTION,
@@ -147,36 +139,27 @@ def chat_start() -> StartResponse:
 def chat_message(req: MessageRequest) -> MessageResponse:
     """Accepts a user message, logs it, and returns the next LLM follow-up or closing message."""
 
-    # 1. Validate session
     if not session_exists(req.session_id):
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # 2. Log user message
     add_message(req.session_id, "user", req.message)
-
-    # 3. Determine question index
     question_index = count_user_messages(req.session_id)
 
-    # [REVIEW 2] TCP-40 / TCP-41: Log that a user message was sent
     log_event(
         req.session_id,
         "message_sent",
         {"turn": question_index, "character_count": len(req.message)},
     )
 
-    # 4. Check if we reached the question cap
     if question_index >= TOTAL_QUESTIONS:
         add_message(req.session_id, "assistant", CLOSING_MESSAGE)
 
-        # [REVIEW 2] TCP-40 / TCP-41: Log session completion
         log_event(
             req.session_id,
             "session_completed",
             {"total_turns": TOTAL_QUESTIONS},
         )
 
-        # [FIXED]: Compute real RIASEC scores and store them via log_event!
-        # This preserves the scores in SQLite events table without breaking the sessions schema.
         full_transcript = get_messages(req.session_id)
         scores = score_session(full_transcript)
         log_event(req.session_id, "score_computed", scores)
@@ -188,7 +171,6 @@ def chat_message(req: MessageRequest) -> MessageResponse:
             total_questions=TOTAL_QUESTIONS,
         )
 
-    # 5. Generate LLM follow-up using Sruthi's real wrapper
     history = get_messages(req.session_id)
     try:
         reply = call_llm(messages=history, system_prompt=FOLLOWUP_SYSTEM_PROMPT)
@@ -196,10 +178,8 @@ def chat_message(req: MessageRequest) -> MessageResponse:
         print(f"\n[LLM ERROR]: {e}\n") 
         reply = "Sorry, I'm having trouble responding right now — try again in a moment."
 
-    # 6. Log assistant follow-up
     add_message(req.session_id, "assistant", reply)
 
-    # [REVIEW 2] TCP-40 / TCP-41: Log assistant follow-up generation
     log_event(
         req.session_id,
         "followup_generated",
@@ -231,16 +211,40 @@ def get_session_history(session_id: str):
 
 
 # =====================================================================
-# [REVIEW 2 ADDITIONS]: TELEMETRY & DASHBOARD ENDPOINTS
-# TCP-41, TCP-51, TCP-52, TCP-53, TCP-54
+# [GOKUL CONTRACT]: INFERENCE SCORE RETRIEVAL
+# =====================================================================
+
+@app.get("/api/chat/inference/{session_id}")
+def get_inference_scores(session_id: str):
+    """
+    Retrieves the already-computed 6D inference scores from SQLite events table
+    without re-running the LLM scoring engine.
+    """
+    if not session_exists(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    scores = get_latest_inference_scores(session_id)
+
+    if scores is None:
+        raise HTTPException(
+            status_code=404, 
+            detail="Inference scores not found for this session yet."
+        )
+
+    return {
+        "status": "success",
+        "session_id": session_id,
+        "scores": scores
+    }
+
+
+# =====================================================================
+# TELEMETRY & DASHBOARD ENDPOINTS (TCP-41, TCP-51, TCP-52, TCP-53, TCP-54)
 # =====================================================================
 
 @app.post("/api/events/log")
 def record_event(req: EventLogRequest):
-    """
-    TCP-41: Endpoint for frontend UI to log custom interaction events
-    (e.g. career_card_clicked, filter_applied, tab_switched).
-    """
+    """TCP-41: Endpoint for frontend UI to log custom interaction events."""
     if not session_exists(req.session_id):
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -254,10 +258,7 @@ def record_event(req: EventLogRequest):
 
 @app.get("/api/dashboard/metrics")
 def get_metrics():
-    """
-    TCP-51 / TCP-52: Returns aggregated system metrics for the
-    analytics / admin dashboard view.
-    """
+    """TCP-51 / TCP-52: Returns aggregated system metrics for dashboard."""
     metrics = get_dashboard_metrics()
     return {
         "status": "success",
@@ -267,9 +268,7 @@ def get_metrics():
 
 @app.get("/api/dashboard/timeline/{session_id}")
 def get_timeline(session_id: str):
-    """
-    TCP-54: Returns a chronological timeline of all user turns and telemetry events for a session.
-    """
+    """TCP-54: Returns a chronological timeline of all user turns and events."""
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
     timeline = get_session_timeline(session_id)
@@ -278,22 +277,19 @@ def get_timeline(session_id: str):
 
 @app.get("/api/dashboard/field-summary")
 def get_field_metrics():
-    """
-    TCP-53: Returns interaction distribution per field/type for dashboard visuals.
-    """
+    """TCP-53: Returns interaction distribution per field/type for dashboard visuals."""
     summary = get_field_summary()
     return {"status": "success", "field_summary": summary}
 
 
 # =====================================================================
-# [EXPLAINABILITY ADDITION]: SHAP MATCH EXPLAINER ENDPOINT
+# SHAP MATCH EXPLAINER ENDPOINT
 # =====================================================================
 
 @app.get("/api/chat/explain/{session_id}/{occupation_id}")
 def get_match_explanation(session_id: str, occupation_id: str):
     """
-    Uses Aleena's SHAP explainer (explain_match) to break down feature contributions
-    for why a student matched with a specific occupation.
+    Uses Aleena's SHAP explainer (explain_match) to break down feature contributions.
     """
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
@@ -301,7 +297,6 @@ def get_match_explanation(session_id: str, occupation_id: str):
     full_transcript = get_messages(session_id)
     scores = score_session(full_transcript)
     
-    # Extract 6D float values into list order matching RIASEC columns
     student_vector = [
         float(scores.get("creates_expresses", 0.0)),
         float(scores.get("organizes_systems", 0.0)),

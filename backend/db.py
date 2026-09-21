@@ -131,6 +131,28 @@ def log_event(session_id: str, event_type: str, event_data: dict = None) -> None
     conn.close()
 
 
+def get_latest_inference_scores(session_id: str) -> dict | None:
+    """
+    Retrieves already-computed 6D inference scores for a session from SQLite events table.
+    Avoids re-running LLM scoring.
+    """
+    conn = get_db()
+    cursor = conn.execute("""
+        SELECT event_data FROM events 
+        WHERE session_id = ? AND event_type = 'score_computed'
+        ORDER BY id DESC LIMIT 1
+    """, (session_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row and row["event_data"]:
+        try:
+            return json.loads(row["event_data"])
+        except Exception:
+            return None
+    return None
+
+
 def get_dashboard_metrics() -> dict:
     """
     TCP-52: Computes aggregated analytics for the admin/dashboard view.
@@ -208,18 +230,11 @@ def get_field_summary() -> dict:
 
 
 if __name__ == "__main__":
-    # 1. Initialize tables
     init_db()
-    
-    # 2. Test session creation & logging
     test_session_id = create_session()
     add_message(test_session_id, "assistant", "What have you been curious about lately?")
     add_message(test_session_id, "user", "I've been tinkering with mechanical keyboards.")
     log_event(test_session_id, "session_started", {"source": "test_script"})
-    
-    # 3. Print verification outputs
     print(f"Created & verified session: {test_session_id}")
     print("\n[REVIEW 2 TEST] Dashboard Metrics:")
     print(json.dumps(get_dashboard_metrics(), indent=2))
-    print("\n[REVIEW 2 TEST] Session Timeline:")
-    print(json.dumps(get_session_timeline(test_session_id), indent=2))
