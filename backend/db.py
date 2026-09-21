@@ -2,7 +2,7 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 import os
-import json  # [NEW FOR REVIEW 2]: Needed to serialize event_data to JSON strings
+import json  # Needed to serialize event_data to JSON strings
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "kindling.db")
 
@@ -30,7 +30,7 @@ def init_db():
             FOREIGN KEY (session_id) REFERENCES sessions(session_id)
         );
 
-        -- [NEW FOR REVIEW 2] TCP-41: Telemetry events table
+        -- [REVIEW 2] TCP-41: Telemetry events table
         CREATE TABLE IF NOT EXISTS events (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id  TEXT NOT NULL,
@@ -45,8 +45,8 @@ def init_db():
 
 def create_session() -> str:
     """Generates a new session_id, saves it to the DB, and returns the ID."""
-    session_id = str(uuid.uuid4())  # Generates a random unique string like "c9bf9e57-1685-4c89-bafb-ff5af830be8a"
-    now = datetime.now(timezone.utc).isoformat()  # Current timestamp in standard ISO format
+    session_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
     
     conn = get_db()
     conn.execute(
@@ -80,7 +80,6 @@ def get_messages(session_id: str) -> list[dict]:
     rows = cursor.fetchall()
     conn.close()
     
-    # Convert each DB row into the {"role": ..., "content": ...} shape
     formatted_messages = []
     for row in rows:
         formatted_messages.append({
@@ -111,8 +110,8 @@ def session_exists(session_id: str) -> bool:
 
 
 # =====================================================================
-# [NEW FOR REVIEW 2] TELEMETRY & DASHBOARD DB FUNCTIONS
-# TCP-41, TCP-52
+# [REVIEW 2] TELEMETRY & DASHBOARD DB FUNCTIONS
+# TCP-41, TCP-52, TCP-53, TCP-54
 # =====================================================================
 
 def log_event(session_id: str, event_type: str, event_data: dict = None) -> None:
@@ -139,18 +138,14 @@ def get_dashboard_metrics() -> dict:
     """
     conn = get_db()
 
-    # 1. Total Sessions
     total_sessions = conn.execute("SELECT COUNT(*) AS cnt FROM sessions").fetchone()["cnt"]
 
-    # 2. Total User Messages
     total_user_messages = conn.execute(
         "SELECT COUNT(*) AS cnt FROM messages WHERE sender = 'user'"
     ).fetchone()["cnt"]
 
-    # 3. Total Events
     total_events = conn.execute("SELECT COUNT(*) AS cnt FROM events").fetchone()["cnt"]
 
-    # 4. Breakdown by Event Type
     event_rows = conn.execute("""
         SELECT event_type, COUNT(*) AS cnt
         FROM events
@@ -159,7 +154,6 @@ def get_dashboard_metrics() -> dict:
     """).fetchall()
     event_breakdown = {row["event_type"]: row["cnt"] for row in event_rows}
 
-    # 5. Recent Active Sessions
     recent_rows = conn.execute("""
         SELECT session_id, created_at
         FROM sessions
@@ -179,40 +173,53 @@ def get_dashboard_metrics() -> dict:
     }
 
 
+def get_session_timeline(session_id: str) -> list[dict]:
+    """
+    TCP-54: Returns an ordered, chronological timeline combining messages and events for a session.
+    """
+    conn = get_db()
+    cursor = conn.execute("""
+        SELECT 'message' AS item_type, sender AS detail, content AS data, timestamp 
+        FROM messages WHERE session_id = ?
+        UNION ALL
+        SELECT 'event' AS item_type, event_type AS detail, event_data AS data, timestamp 
+        FROM events WHERE session_id = ?
+        ORDER BY timestamp ASC
+    """, (session_id, session_id))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_field_summary() -> dict:
+    """
+    TCP-53: Returns event frequencies and distribution across telemetry types for dashboard charts.
+    """
+    conn = get_db()
+    cursor = conn.execute("""
+        SELECT event_type, COUNT(*) AS total_count, MAX(timestamp) AS last_seen
+        FROM events
+        GROUP BY event_type
+        ORDER BY total_count DESC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return {r["event_type"]: {"count": r["total_count"], "last_seen": r["last_seen"]} for r in rows}
+
+
 if __name__ == "__main__":
-    # 1. Initialize tables (including the new 'events' table)
+    # 1. Initialize tables
     init_db()
     
-    # 2. Test creating a session
+    # 2. Test session creation & logging
     test_session_id = create_session()
-    print(f"Created session: {test_session_id}")
-    
-    # 3. Test adding messages
     add_message(test_session_id, "assistant", "What have you been curious about lately?")
     add_message(test_session_id, "user", "I've been tinkering with mechanical keyboards.")
+    log_event(test_session_id, "session_started", {"source": "test_script"})
     
-    # 4. Test getting messages
-    history = get_messages(test_session_id)
-    print("Conversation history:")
-    for msg in history:
-        print(f"  {msg['role']}: {msg['content']}")
-        
-    # 5. Test counting user messages
-    user_count = count_user_messages(test_session_id)
-    print(f"User message count: {user_count}")
-
-    # 6. Create a real session
-    real_session_id = create_session()
-    print(f"Created real session: {real_session_id}")
-    
-    # 7. Test session_exists with a REAL session ID (should print True)
-    print("Does real session exist?", session_exists(real_session_id))
-    
-    # 8. Test session_exists with a FAKE session ID (should print False)
-    print("Does fake session exist?", session_exists("this-is-a-fake-id-12345"))
-
-    # 9. [NEW FOR REVIEW 2]: Test logging an event and getting metrics
-    log_event(real_session_id, "session_started", {"source": "test_script"})
-    log_event(real_session_id, "message_sent", {"character_count": 42})
+    # 3. Print verification outputs
+    print(f"Created & verified session: {test_session_id}")
     print("\n[REVIEW 2 TEST] Dashboard Metrics:")
     print(json.dumps(get_dashboard_metrics(), indent=2))
+    print("\n[REVIEW 2 TEST] Session Timeline:")
+    print(json.dumps(get_session_timeline(test_session_id), indent=2))

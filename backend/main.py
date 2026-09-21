@@ -6,21 +6,27 @@ Endpoints:
   GET  /api/chat/session/{session_id} → { session_id, total_messages, user_messages_count, transcript }
 
 Review 2 additions (additive only):
-  POST /api/events/log        → log custom UI / interaction events (TCP-41)
-  GET  /api/dashboard/metrics → aggregated analytics for dashboard (TCP-51 / TCP-52)
+  POST /api/events/log                    → log custom UI / interaction events (TCP-41)
+  GET  /api/dashboard/metrics             → aggregated analytics for dashboard (TCP-51 / TCP-52)
+  GET  /api/dashboard/timeline/{session_id}→ chronological timeline of user turns and events (TCP-54)
+  GET  /api/dashboard/field-summary       → summary of interaction types (TCP-53)
+
+Explainability Addition:
+  GET  /api/chat/explain/{session_id}/{occupation_id} → SHAP breakdown of score contributions
 """
 
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-from typing import Optional, Dict, Any  # [NEW FOR REVIEW 2]
+from typing import Optional, Dict, Any
 
-# 1. Locate folders and add BOTH backend and ai_core to sys.path
+# 1. Locate folders and add backend, ai_core, and Scripts to sys.path
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BACKEND_DIR.parent
 
-sys.path.append(str(BACKEND_DIR))            # [FIX]: Fixes 'No module named db'
+sys.path.append(str(BACKEND_DIR))            # Fixes 'No module named db'
 sys.path.append(str(ROOT_DIR / "ai_core"))  # Fixes 'No module named call_llm'
+sys.path.append(str(ROOT_DIR / "Scripts"))  # Fixes 'No module named matching'
 load_dotenv(ROOT_DIR / ".env")
 
 from fastapi import FastAPI, HTTPException
@@ -28,20 +34,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # 2. Import DB helpers and Sruthi's real LLM wrapper
-from backend.db import (
+from db import (
     init_db,
     create_session,
     add_message,
     get_messages,
     count_user_messages,
     session_exists,
-    # [NEW FOR REVIEW 2] TCP-41 / TCP-52
+    # Review 2 Additions
     log_event,
     get_dashboard_metrics,
+    get_session_timeline,   # [ADDED]: For TCP-54 timeline endpoint
+    get_field_summary,      # [ADDED]: For TCP-53 field summary endpoint
 )
 from backend.shap_explainer import explain_match
 from call_llm import call_llm
 from score_session import score_session
+
 # ── Constants ─────────────────────────────────────────────────
 
 OPENING_QUESTION = "What have you been curious about lately — even something small?"
@@ -106,7 +115,7 @@ class MessageResponse(BaseModel):
     total_questions: int
 
 
-# [NEW FOR REVIEW 2] TCP-41: Request model for custom event logging
+# [REVIEW 2]: Request model for custom event logging (TCP-41)
 class EventLogRequest(BaseModel):
     session_id: str
     event_type: str
@@ -124,7 +133,7 @@ def chat_start() -> StartResponse:
     # 2. Store the opening question as an assistant message in DB
     add_message(session_id, "assistant", OPENING_QUESTION)
 
-    # [NEW FOR REVIEW 2] TCP-40 / TCP-41: Log session start event
+    # [REVIEW 2] TCP-40 / TCP-41: Log session start event
     log_event(session_id, "session_started", {"source": "api", "max_turns": TOTAL_QUESTIONS})
 
     # 3. Return the JSON response matching Gokul's contract
@@ -148,7 +157,7 @@ def chat_message(req: MessageRequest) -> MessageResponse:
     # 3. Determine question index
     question_index = count_user_messages(req.session_id)
 
-    # [NEW FOR REVIEW 2] TCP-40 / TCP-41: Log that a user message was sent
+    # [REVIEW 2] TCP-40 / TCP-41: Log that a user message was sent
     log_event(
         req.session_id,
         "message_sent",
@@ -159,21 +168,19 @@ def chat_message(req: MessageRequest) -> MessageResponse:
     if question_index >= TOTAL_QUESTIONS:
         add_message(req.session_id, "assistant", CLOSING_MESSAGE)
 
-        # [NEW FOR REVIEW 2] TCP-40 / TCP-41: Log session completion
+        # [REVIEW 2] TCP-40 / TCP-41: Log session completion
         log_event(
             req.session_id,
             "session_completed",
             {"total_turns": TOTAL_QUESTIONS},
         )
 
-        # Session complete - score it now.
-        # NOTE for Priya: this computes real RIASEC scores, but there's
-        # nowhere in db.py's schema yet to store them. Needs a decision
-        # on your end - new column on sessions, or a separate scores
-        # table. Logged here for now so nothing is silently lost.
+        # [FIXED]: Compute real RIASEC scores and store them via log_event!
+        # This preserves the scores in SQLite events table without breaking the sessions schema.
         full_transcript = get_messages(req.session_id)
         scores = score_session(full_transcript)
-        print(f"[session {req.session_id}] scored: {scores}")
+        log_event(req.session_id, "score_computed", scores)
+        print(f"[session {req.session_id}] scored & saved: {scores}")
 
         return MessageResponse(
             reply=CLOSING_MESSAGE,
@@ -192,7 +199,7 @@ def chat_message(req: MessageRequest) -> MessageResponse:
     # 6. Log assistant follow-up
     add_message(req.session_id, "assistant", reply)
 
-    # [NEW FOR REVIEW 2] TCP-40 / TCP-41: Log assistant follow-up generation
+    # [REVIEW 2] TCP-40 / TCP-41: Log assistant follow-up generation
     log_event(
         req.session_id,
         "followup_generated",
@@ -221,3 +228,91 @@ def get_session_history(session_id: str):
         "user_messages_count": user_count,
         "transcript": history,
     }
+
+
+# =====================================================================
+# [REVIEW 2 ADDITIONS]: TELEMETRY & DASHBOARD ENDPOINTS
+# TCP-41, TCP-51, TCP-52, TCP-53, TCP-54
+# =====================================================================
+
+@app.post("/api/events/log")
+def record_event(req: EventLogRequest):
+    """
+    TCP-41: Endpoint for frontend UI to log custom interaction events
+    (e.g. career_card_clicked, filter_applied, tab_switched).
+    """
+    if not session_exists(req.session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    log_event(req.session_id, req.event_type, req.event_data)
+    return {
+        "status": "logged",
+        "session_id": req.session_id,
+        "event_type": req.event_type,
+    }
+
+
+@app.get("/api/dashboard/metrics")
+def get_metrics():
+    """
+    TCP-51 / TCP-52: Returns aggregated system metrics for the
+    analytics / admin dashboard view.
+    """
+    metrics = get_dashboard_metrics()
+    return {
+        "status": "success",
+        "metrics": metrics,
+    }
+
+
+@app.get("/api/dashboard/timeline/{session_id}")
+def get_timeline(session_id: str):
+    """
+    TCP-54: Returns a chronological timeline of all user turns and telemetry events for a session.
+    """
+    if not session_exists(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    timeline = get_session_timeline(session_id)
+    return {"session_id": session_id, "total_items": len(timeline), "timeline": timeline}
+
+
+@app.get("/api/dashboard/field-summary")
+def get_field_metrics():
+    """
+    TCP-53: Returns interaction distribution per field/type for dashboard visuals.
+    """
+    summary = get_field_summary()
+    return {"status": "success", "field_summary": summary}
+
+
+# =====================================================================
+# [EXPLAINABILITY ADDITION]: SHAP MATCH EXPLAINER ENDPOINT
+# =====================================================================
+
+@app.get("/api/chat/explain/{session_id}/{occupation_id}")
+def get_match_explanation(session_id: str, occupation_id: str):
+    """
+    Uses Aleena's SHAP explainer (explain_match) to break down feature contributions
+    for why a student matched with a specific occupation.
+    """
+    if not session_exists(session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    full_transcript = get_messages(session_id)
+    scores = score_session(full_transcript)
+    
+    # Extract 6D float values into list order matching RIASEC columns
+    student_vector = [
+        float(scores.get("creates_expresses", 0.0)),
+        float(scores.get("organizes_systems", 0.0)),
+        float(scores.get("investigates_why", 0.0)),
+        float(scores.get("builds_tinkers", 0.0)),
+        float(scores.get("works_with_people", 0.0)),
+        float(scores.get("leads_persuades", 0.0)),
+    ]
+
+    try:
+        explanation = explain_match(student_vector, occupation_id)
+        return {"status": "success", "session_id": session_id, "explanation": explanation}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Explanation generation failed: {str(e)}")
