@@ -28,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # 2. Import DB helpers and Sruthi's real LLM wrapper
-from db import (
+from backend.db import (
     init_db,
     create_session,
     add_message,
@@ -39,6 +39,7 @@ from db import (
     log_event,
     get_dashboard_metrics,
 )
+from backend.shap_explainer import explain_match
 from call_llm import call_llm
 from score_session import score_session
 # ── Constants ─────────────────────────────────────────────────
@@ -219,39 +220,4 @@ def get_session_history(session_id: str):
         "total_messages": len(history),
         "user_messages_count": user_count,
         "transcript": history,
-    }
-
-
-# =====================================================================
-# [NEW FOR REVIEW 2] TELEMETRY & DASHBOARD ENDPOINTS
-# TCP-41, TCP-51, TCP-52
-# =====================================================================
-
-@app.post("/api/events/log")
-def record_event(req: EventLogRequest):
-    """
-    TCP-41: Endpoint for frontend UI to log custom interaction events
-    (e.g. career_card_clicked, filter_applied, tab_switched).
-    """
-    if not session_exists(req.session_id):
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    log_event(req.session_id, req.event_type, req.event_data)
-    return {
-        "status": "logged",
-        "session_id": req.session_id,
-        "event_type": req.event_type,
-    }
-
-
-@app.get("/api/dashboard/metrics")
-def get_metrics():
-    """
-    TCP-51 / TCP-52: Returns aggregated system metrics for the
-    analytics / admin dashboard view.
-    """
-    metrics = get_dashboard_metrics()
-    return {
-        "status": "success",
-        "metrics": metrics,
     }
