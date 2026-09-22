@@ -48,7 +48,7 @@ function initializeSignals() {
 
     let questionIndex = 1;
 
-    let totalQuestions = 5;
+    let totalQuestions = 7;
 
     let isLoading = false;
 
@@ -204,6 +204,11 @@ function initializeSignals() {
 
             sessionId =
                 data.session_id;
+
+            sessionStorage.setItem(
+                "kindling_session_id",
+                 sessionId
+            );
 
 
             if (!sessionId) {
@@ -388,6 +393,8 @@ function initializeSignals() {
             updateProgress();
 
         }
+
+        
 
         catch (error) {
 
