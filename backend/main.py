@@ -36,7 +36,6 @@ from db import (
 from backend.shap_explainer import explain_match
 from call_llm import call_llm
 from score_session import score_session
-from rag_explanation import get_top_tasks_for_occupation, compose_explanation, validate_explanation
 from matching import match_occupations, load_career_graph
 
 OPENING_QUESTION = "What have you been curious about lately — even something small?"
@@ -109,6 +108,13 @@ class ProfileUpdateRequest(BaseModel):
     session_id: str
     inference: Dict[str, float]
 
+# [NEW FOR TCP-58]: Request model for accepting or rejecting a trait
+class TraitDecisionRequest(BaseModel):
+    session_id: str
+    trait: str                          # e.g., "builds_tinkers"
+    action: str                         # "accept" or "reject"
+    override_value: Optional[float] = None  # Optional new score if rejecting/overriding
+
 # ── Signals API (Preserved 100%) ───────────────────────────────
 
 @app.post("/api/chat/start", response_model=StartResponse)
@@ -128,12 +134,9 @@ def chat_message(req: MessageRequest) -> MessageResponse:
 
     log_event(req.session_id, "message_sent", {"turn": question_index, "character_count": len(req.message)})
 
-    # Guard: If question cap reached or exceeded
     if question_index >= TOTAL_QUESTIONS:
         add_message(req.session_id, "assistant", CLOSING_MESSAGE)
 
-        # [FIX 1]: ONLY compute scores on turn 7 EXACTLY.
-        # Messages sent AFTER turn 7 will not re-trigger scoring or overwrite user profile edits.
         if question_index == TOTAL_QUESTIONS:
             log_event(req.session_id, "session_completed", {"total_turns": TOTAL_QUESTIONS})
             full_transcript = get_messages(req.session_id)
@@ -176,8 +179,7 @@ def get_inference_scores(session_id: str):
         raise HTTPException(status_code=404, detail="Inference scores are not available yet. Please complete the 7-question chat.")
 
     clean_scores = {k: v for k, v in scores.items() if k != "inference_failed"}
-    
-    # [FIX 2]: Explicitly surface inference_failed flag
+
     return {
         "status": "success",
         "session_id": session_id,
@@ -221,7 +223,7 @@ def get_career_graph(session_id: str, top_k: int = 5):
         "careers": enriched_careers
     }
 
-# ── User Control & Profile Endpoints ─────────────────────────
+# ── User Control & Profile Endpoints (TCP-57, TCP-58, TCP-59, TCP-60) ─────
 
 @app.get("/api/user/profile/{session_id}")
 def get_user_profile(session_id: str):
@@ -234,7 +236,6 @@ def get_user_profile(session_id: str):
 
     clean_scores = {k: v for k, v in scores.items() if k != "inference_failed"}
 
-    # [FIX 2]: Explicitly surface inference_failed flag
     return {
         "status": "success",
         "session_id": session_id,
@@ -244,12 +245,11 @@ def get_user_profile(session_id: str):
 
 @app.post("/api/user/profile/update")
 def update_user_profile(req: ProfileUpdateRequest):
+    """TCP-59 / TCP-60: Updates the profile vector directly on override and persists it."""
     if not session_exists(req.session_id):
         raise HTTPException(status_code=404, detail="Session not found")
 
     inf = req.inference
-
-    # [FIX 3]: Require all 6 dimensions
     missing_keys = REQUIRED_DIMENSIONS - set(inf.keys())
     if missing_keys:
         raise HTTPException(
@@ -257,7 +257,6 @@ def update_user_profile(req: ProfileUpdateRequest):
             detail=f"Missing required dimensions: {list(missing_keys)}. All 6 dimensions must be provided."
         )
 
-    # [FIX 3]: Validate float range [0.0, 1.0] for all dimensions
     validated_inference = {}
     for k in REQUIRED_DIMENSIONS:
         v = inf[k]
@@ -268,7 +267,6 @@ def update_user_profile(req: ProfileUpdateRequest):
             )
         validated_inference[k] = float(v)
 
-    # Log validated edit event
     log_event(req.session_id, "profile_updated", validated_inference)
 
     return {
@@ -277,6 +275,56 @@ def update_user_profile(req: ProfileUpdateRequest):
         "message": "User profile successfully updated",
         "inference": validated_inference
     }
+
+# [NEW FOR TCP-58]: Trait Accept/Reject Decision Endpoint
+@app.post("/api/user/trait/decision")
+def trait_decision(req: TraitDecisionRequest):
+    """
+    TCP-58: Build the accept/reject endpoint for an inferred trait.
+    Allows students to explicitly accept or reject an inferred score.
+    """
+    if not session_exists(req.session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if req.trait not in REQUIRED_DIMENSIONS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid trait '{req.trait}'. Must be one of: {list(REQUIRED_DIMENSIONS)}"
+        )
+
+    if req.action not in ["accept", "reject"]:
+        raise HTTPException(status_code=400, detail="Action must be 'accept' or 'reject'")
+
+    scores = get_latest_inference_scores(req.session_id)
+    if not scores:
+        raise HTTPException(status_code=404, detail="Inference scores are not available yet.")
+
+    clean_scores = {k: float(v) for k, v in scores.items() if k in REQUIRED_DIMENSIONS}
+
+    if req.action == "accept":
+        log_event(req.session_id, "trait_accepted", {"trait": req.trait, "score": clean_scores[req.trait]})
+        return {
+            "status": "success",
+            "session_id": req.session_id,
+            "message": f"Trait '{req.trait}' accepted.",
+            "inference": clean_scores
+        }
+
+    elif req.action == "reject":
+        new_val = req.override_value if req.override_value is not None else 0.0
+        if new_val < 0.0 or new_val > 1.0:
+            raise HTTPException(status_code=400, detail="override_value must be between 0.0 and 1.0")
+
+        clean_scores[req.trait] = float(new_val)
+        log_event(req.session_id, "trait_rejected", {"trait": req.trait, "new_score": new_val})
+        log_event(req.session_id, "profile_updated", clean_scores)
+
+        return {
+            "status": "success",
+            "session_id": req.session_id,
+            "message": f"Trait '{req.trait}' rejected and updated to {new_val}.",
+            "inference": clean_scores
+        }
 
 # ── Telemetry & Analytics Endpoints ───────────────────────────
 
@@ -311,7 +359,7 @@ def get_match_explanation(session_id: str, occupation_id: str):
     scores = get_latest_inference_scores(session_id)
     if not scores:
         raise HTTPException(
-            status_code=404,
+            status_code=404, 
             detail="Inference scores are not available yet. Please complete the 7-question chat."
         )
 
@@ -325,25 +373,7 @@ def get_match_explanation(session_id: str, occupation_id: str):
     ]
 
     try:
-        shap_explanation = explain_match(student_vector, occupation_id)
+        explanation = explain_match(student_vector, occupation_id)
+        return {"status": "success", "session_id": session_id, "explanation": explanation}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Explanation generation failed: {str(e)}")
-
-    all_occupations = {occ["id"]: occ for occ in load_career_graph()}
-    occ_record = all_occupations.get(occupation_id)
-
-    narrative = None
-    narrative_validation = None
-    if occ_record:
-        tasks = get_top_tasks_for_occupation(occupation_id)
-        if tasks:
-            narrative = compose_explanation(occ_record["title"], tasks)
-            narrative_validation = validate_explanation(narrative, tasks)
-
-    return {
-        "status": "success",
-        "session_id": session_id,
-        "explanation": shap_explanation,
-        "narrative": narrative,
-        "narrative_validation": narrative_validation,
-    }
