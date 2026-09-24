@@ -26,7 +26,7 @@
         $('[data-signup-only]').hidden = mode !== 'signup';
         authSubmit.textContent = mode === 'signup' ? 'Create account' : 'Sign in';
         aPass.autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
-        authErr.textContent = '';
+        authErr.innerHTML = '';
     }
 
     $$('.auth-tabs [role=tab]').forEach(t => t.addEventListener('click', () => setAuthMode(t.dataset.mode)));
@@ -68,7 +68,7 @@
     authForm.addEventListener('submit', async e => {
 
         e.preventDefault();
-        authErr.textContent = '';
+        authErr.innerHTML = '';
 
         const email = aEmail.value.trim();
         const password = aPass.value;
@@ -102,7 +102,33 @@
             const data = await response.json().catch(() => ({}));
 
             if (!response.ok) {
-                authErr.textContent = data.detail || 'Something went wrong. Please try again.';
+                const detail = data.detail || '';
+
+                // CASE 1: Tried to Sign In, but no account exists for this email
+                if (authMode === 'signin' && (response.status === 404 || detail.toLowerCase().includes('no account') || detail.toLowerCase().includes('not found'))) {
+                    authErr.innerHTML = 'You don\'t have an account with this email yet. ' +
+                        '<button type="button" id="errSwitchTab" style="background:none;border:none;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font-weight:600;">Create an account →</button>';
+                    
+                    const switchBtn = $('#errSwitchTab');
+                    if (switchBtn) {
+                        switchBtn.addEventListener('click', () => setAuthMode('signup'));
+                    }
+                }
+                // CASE 2: Tried to Create Account, but account already exists
+                else if (authMode === 'signup' && (response.status === 409 || detail.toLowerCase().includes('already exists'))) {
+                    authErr.innerHTML = 'An account with this email already exists. ' +
+                        '<button type="button" id="errSwitchTab" style="background:none;border:none;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font-weight:600;">Sign in instead →</button>';
+                    
+                    const switchBtn = $('#errSwitchTab');
+                    if (switchBtn) {
+                        switchBtn.addEventListener('click', () => setAuthMode('signin'));
+                    }
+                }
+                // CASE 3: General error (e.g. wrong password)
+                else {
+                    authErr.textContent = detail || 'Something went wrong. Please try again.';
+                }
+
                 return;
             }
 
@@ -110,7 +136,7 @@
             applySignedInUI();
 
             authForm.reset();
-            authErr.textContent = '';
+            authErr.innerHTML = '';
 
             toast(authMode === 'signup' ? `Welcome to Kindling, ${data.email}` : `Welcome back, ${data.email}`);
 

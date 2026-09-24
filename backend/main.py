@@ -299,22 +299,26 @@ def signup(req: SignupRequest) -> AuthResponse:
 
 @app.post("/api/auth/login", response_model=AuthResponse)
 def login(req: LoginRequest) -> AuthResponse:
-    # Same generic error for "no such email" and "wrong password" —
-    # never reveal which one was wrong.
-    invalid = HTTPException(status_code=401, detail="Incorrect email or password.")
-
     user = get_user_by_email(req.email)
 
+    # 1. No account exists with this email
     if user is None:
-        raise invalid
+        raise HTTPException(
+            status_code=404, 
+            detail="No account found with this email. Please create an account first."
+        )
 
+    # 2. Check password
     password_matches = bcrypt.checkpw(
         req.password.encode("utf-8"),
         user["password_hash"].encode("utf-8")
     )
 
     if not password_matches:
-        raise invalid
+        raise HTTPException(
+            status_code=401, 
+            detail="Incorrect password. Please try again."
+        )
 
     return AuthResponse(token=user["id"], email=user["email"])
 
