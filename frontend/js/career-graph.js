@@ -1,20 +1,5 @@
 /* =========================================================
-   CAREER GRAPH — real branching tree (Phase 4 of the star->tree
-   rebuild; see backend/career_tree.py, tree_enrichment.py,
-   Tests/test_career_tree.py for the deterministic build + AI
-   naming layers this renders).
-
-   Real endpoint: GET /api/career-tree/{session_id}, returning
-   {nodes, edges} exactly per the master prompt's API contract —
-   the backend decides every node/edge that exists; this file only
-   lays them out radially and renders them. It never invents a
-   node, a parent link, a cross-link, or panel text.
-
-   Layout, hover/selection dimming, the "Show everything / Only
-   what I've opened" filter, and every detail-panel section below
-   are adapted directly from the approved mockup's own 2-ring
-   (hub->area->leaf) implementation, extended to the real 3-ring
-   hierarchy (hub->area->field->career) Part D actually specifies.
+   CAREER GRAPH — real branching tree & empty state
    ========================================================= */
 
 (() => {
@@ -41,10 +26,6 @@
 
     const AREA_R = 175, FIELD_R = 265, CAREER_R = 350;
 
-    /* Long labels on the map itself become the short display title;
-       the full real label is always still shown via a tooltip and
-       the detail panel's own heading — never lost, just not drawn
-       at full length on the star map. */
     function mapLabel(label) {
         return label && label.length > 22 ? label.slice(0, 21).trimEnd() + '…' : label;
     }
@@ -62,7 +43,22 @@
     };
 
     function renderEmpty(message) {
-        panel.innerHTML = `<p class="eyebrow">Career graph</p><h2 class="display">A universe<br>of possibilities</h2><p class="lede">${esc(message)}</p>`;
+        if (layer) {
+            try { layer.innerHTML = ''; } catch (e) {}
+        }
+
+        panel.innerHTML = `
+            <p class="eyebrow">Career graph</p>
+            <h2 class="display">Your map is waiting</h2>
+            <p class="lede">${esc(message)}</p>
+            <div style="margin-top:20px;">
+                <a href="#explore" class="btn-gold sm" style="display:inline-flex; text-decoration:none; align-items:center; gap:6px;">
+                    Go to Explore Chat
+                    <svg width="12" height="12"><use href="#arrow"/></svg>
+                </a>
+            </div>
+            <p class="whisper" style="margin-top:28px;">Share even one real hobby or interest and your directions will appear.</p>
+        `;
     }
 
     async function loadTree() {
@@ -70,7 +66,7 @@
         const sessionId = K.getSessionId();
 
         if (!sessionId) {
-            renderEmpty('Start a conversation on Explore to see directions connected to your exploration.');
+            renderEmpty("Your career map is waiting! Head over to Explore and start a conversation first.");
             return;
         }
 
@@ -80,7 +76,7 @@
 
             if (response.status === 404) {
                 const body = await response.json().catch(() => null);
-                renderEmpty(body?.detail || 'Career directions are not available yet. Please complete the chat first.');
+                renderEmpty(body?.detail || "Your career map needs a bit more chat detail! Tell Kindling about what you enjoy doing in Explore to see connected careers.");
                 return;
             }
 
@@ -91,12 +87,23 @@
             treeEdges = data.edges || [];
 
             if (treeNodes.length <= 1) {
-                renderEmpty('No directions found yet.');
+                renderEmpty("No directions found yet. Share more about your interests in Explore.");
                 return;
             }
 
             buildGraph();
-            renderOverview();
+
+            // FIX 2: Restore last selected node if user came back from chat
+            let restoreId = null;
+            try {
+                restoreId = sessionStorage.getItem('kindling_graph_selected');
+            } catch (e) {}
+
+            if (restoreId && byId[restoreId]) {
+                selectNode(restoreId);
+            } else {
+                renderOverview();
+            }
 
         }
 
@@ -107,12 +114,6 @@
 
     }
 
-    /*
-     * How many real career leaves sit under a node — used to size
-     * each area/field's angular sector proportionally, per the
-     * master prompt's "each area gets a sector proportional to its
-     * number of leaf careers" rule, applied at every ring.
-     */
     function leafCount(id) {
         const kids = childrenOf[id];
         if (!kids || !kids.length) return 1;
@@ -156,15 +157,6 @@
 
                 const fieldNode = byId[fieldId];
                 fieldNode.ang = fCenterAng;
-                /*
-                 * Real testing (dense clusters like "Works with
-                 * people") showed the field ring is where the worst
-                 * label collisions happen — field names are often the
-                 * longest on the map, sitting closest together. A
-                 * 3-tier radius cycle (not just alternating) gives
-                 * angularly-adjacent siblings real separation instead
-                 * of just alternating between two close radii.
-                 */
                 const fr = FIELD_R + (j % 3) * 34;
                 fieldNode.x = Math.cos(fCenterAng) * fr;
                 fieldNode.y = Math.sin(fCenterAng) * fr;
@@ -178,7 +170,6 @@
                     const cAng = fCenterAng + t * fieldSpread;
                     const careerNode = byId[careerId];
                     careerNode.ang = cAng;
-                    // 3-tier radius cycle, same reasoning as fields above.
                     const r = CAREER_R + (k % 3) * 40;
                     careerNode.x = Math.cos(cAng) * r;
                     careerNode.y = Math.sin(cAng) * r;
@@ -254,14 +245,6 @@
             nodeEls[n.id] = g;
             if (opened.has(n.id)) g.classList.add('visited');
 
-            /*
-             * Long labels use the short display title on the map
-             * itself, with the real full label always available via
-             * a native tooltip (and, already, the detail panel's own
-             * <h2>) — aria-label on the node group stays the full
-             * real text regardless, since drawNode() set that from
-             * node.label before any truncation happens here.
-             */
             if (node.type !== 'hub') {
                 const truncated = mapLabel(node.label);
                 if (truncated !== node.label) {
@@ -283,18 +266,6 @@
 
     }
 
-    /*
-     * Real collision pass (Part G): the tiered radius stagger above
-     * is a reasonable starting layout, but real testing showed it
-     * still leaves genuine overlaps in dense clusters — some fields
-     * have too few siblings for a stagger cycle to separate them at
-     * all. This measures each label's REAL rendered bounding box
-     * (SVG getBBox(), in world coordinates via each node's own
-     * translate) and, for any two field or career labels that
-     * actually overlap, pushes the outer one further out along its
-     * own angle until they don't. Runs a few passes since pushing
-     * one node out can newly overlap a different neighbor.
-     */
     const LABEL_MARGIN = 7;
 
     function labelWorldBox(node, g) {
@@ -313,13 +284,6 @@
 
     function resolveLabelCollisions() {
         {
-            // One combined pass across BOTH rings — a field label and a
-            // career label from a different branch can sit just as
-            // close together as two siblings in the same ring (found
-            // in real testing: "Computer and Mathematical Occupations"
-            // the field literally overlapped "Computer Systems
-            // Analyst" the career, since FIELD_R and CAREER_R aren't
-            // far apart relative to real label widths).
             const items = treeNodes
                 .filter(n => n.type === 'field' || n.type === 'career')
                 .map(n => ({ node: byId[n.id], g: nodeEls[n.id] }))
@@ -337,11 +301,6 @@
                         const target = Math.hypot(a.node.x, a.node.y) >= Math.hypot(b.node.x, b.node.y) ? a : b;
                         const other = target === a ? b : a;
 
-                        // Push both outward (radius) and away from the
-                        // other node's angle (bearing) — a same-angle
-                        // pair only separates radially; a same-radius
-                        // pair only separates angularly, so real
-                        // overlaps need both levers, not just one.
                         const angDiff = (target.node.ang ?? 0) - (other.node.ang ?? 0);
                         const angPush = angDiff === 0 ? 0.03 : Math.sign(angDiff) * 0.03;
                         const newAng = (target.node.ang ?? 0) + angPush;
@@ -359,8 +318,6 @@
             }
         }
 
-        // Branch edges follow their endpoints' positions, so redraw
-        // them after any collision-driven moves above.
         edgeEls.forEach(({ e, path }) => {
             const P = byId[e.source], Q = byId[e.target];
             if (!P || !Q) return;
@@ -392,8 +349,6 @@
         return `<li><button data-go="${toId}"><i style="background:${colorOf[n.type]}"></i>${esc(n.label)}</button>${reason ? `<p class="link-reason">${esc(reason)}</p>` : ''}</li>`;
     }
 
-    /* Real ancestor chain (area -> field for a career), excluding the
-       hub — matches the approved mockup's own breadcrumb rule. */
     function breadcrumbFor(node) {
         const chain = [];
         let p = node.parent ? byId[node.parent] : null;
@@ -463,14 +418,6 @@
 
     }
 
-    /*
-     * "Time spent exploring" on Reflection sums real dwell time per
-     * real area (see reflection.js + backend/main.py's node_time
-     * events) — logged through the existing POST /api/events/log
-     * endpoint. areaAxisFor() walks up to whichever real area a
-     * node sits under (or is itself), so field/career dwell time
-     * still attributes correctly to its real ancestor area.
-     */
     let activeArea = null, activeStartedAt = null;
 
     function areaAxisFor(id) {
@@ -512,6 +459,12 @@
 
         selected = id;
 
+        // FIX 2: Remember selection across page navigation
+        try {
+            if (id) sessionStorage.setItem('kindling_graph_selected', id);
+            else sessionStorage.removeItem('kindling_graph_selected');
+        } catch (e) {}
+
         if (id) {
             opened.add(id);
             nodeEls[id]?.classList.add('visited');
@@ -538,17 +491,6 @@
 
         const askBtn = e.target.closest('[data-ask]');
         if (askBtn) {
-            /*
-             * Every data-ask button (the main CTA, "Try it with
-             * Kindling", and each "Questions you could ask" item)
-             * carries real, node-specific text. Carry the real node
-             * (occupation title/description/tasks when it's a
-             * career; just the real area/field label otherwise) plus
-             * that exact clicked text into Explore, so the next
-             * conversation opens already grounded and prefilled
-             * instead of generic. explore.js reads this once and
-             * clears it immediately after use.
-             */
             const node = selected ? byId[selected] : null;
 
             if (node) {
@@ -571,7 +513,6 @@
 
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.dataset.page === 'graph' && selected) selectNode(null); });
 
-    /* "Show everything" / "Only what I've opened" */
     function applyFilter() {
         const keep = new Set(['you']);
         if (graphFilter === 'opened') {
@@ -592,7 +533,6 @@
         if (graphFilter === 'opened' && !opened.size) toast("Open a star first, and it will show up here");
     }));
 
-    /* pan + zoom (kept from the mockup, unchanged) */
     let view = { x: 0, y: 0, k: 1 };
     const applyView = () => layer.setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
     const svgPoint = (cx, cy) => {

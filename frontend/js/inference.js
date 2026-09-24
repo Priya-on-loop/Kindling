@@ -1,12 +1,5 @@
 /* =========================================================
-   INFERENCE — real radar
-   Real endpoint: GET /api/chat/inference/{session_id}. Radar
-   vertex reach is the real 0-1 score (shapes the drawing
-   only — never printed as a number). The mockup's "evidence"
-   sidebar quoted specific things the user said per theme;
-   the backend has no endpoint that attributes a quote to a
-   dimension, so that sidebar is replaced with the honest,
-   static per-pattern description instead of fabricated quotes.
+   INFERENCE — real radar & empty state handling
    ========================================================= */
 
 (() => {
@@ -35,15 +28,6 @@
     let infEls = {}, axisEls = {}, youNode = null, currentTheme = null;
 
     function renderRadar() {
-
-        /*
-         * inf.innerHTML is cleared on every real refetch (see
-         * onRoute.inference below), so the glow filter has to
-         * be recreated here each time too — building it once
-         * at module scope would leave drawNode()'s halo
-         * circles pointing at a filter id that no longer
-         * exists after the first re-render.
-         */
         inf.innerHTML = '';
 
         const defs = el('defs', {}, inf);
@@ -85,11 +69,9 @@
         onActivate(youNode, () => selectTheme(null));
 
         requestAnimationFrame(() => inf.classList.add('is-shown'));
-
     }
 
     function renderEvidence() {
-
         evList.innerHTML = K.patterns.map(t => {
             const c = colorOf[t.tone];
             return `<li><button class="evidence" data-theme="${t.id}">
@@ -97,7 +79,6 @@
         <span class="evidence-meta"><span class="theme-tag"><i style="background:${c};box-shadow:0 0 6px ${c}"></i>${esc(t.label)}</span><span>${esc(getStrengthLabel(scores[t.key]))}</span></span>
       </button></li>`;
         }).join('');
-
     }
 
     function renderFoot(id) {
@@ -135,28 +116,50 @@
         if (currentTheme === traitKey) renderFoot(traitKey);
     });
 
-    async function loadInference() {
+    // Clean Empty State when scores are 0 / missing / weak
+    function showEmptyState(message) {
+        scores = {};
+        if (inf) {
+            inf.innerHTML = `
+                <g transform="translate(320, 230)">
+                    <text text-anchor="middle" fill="#f5c46a" font-size="18" font-weight="600">✨ Patterns Waiting to Emerge</text>
+                    <text text-anchor="middle" fill="#a0aec0" font-size="13" y="32">Share details in Explore chat to unlock your pattern map</text>
+                </g>
+            `;
+            inf.classList.add('is-shown');
+        }
 
+        if (evList) {
+            evList.innerHTML = `
+                <li class="note-card glass" style="padding:22px; border-left:3px solid #f5c46a; margin-top:12px;">
+                    <p style="color:#fff; font-weight:600; font-size:1rem; margin-bottom:8px;">Need a little more detail</p>
+                    <p style="color:#a0aec0; font-size:0.85rem; line-height:1.5; margin-bottom:16px;">${esc(message)}</p>
+                    <a href="#explore" class="btn-gold sm" style="display:inline-block; text-decoration:none; font-size:0.8rem;">
+                        Go to Explore Chat →
+                    </a>
+                </li>
+            `;
+        }
+
+        if (infFoot) {
+            infFoot.innerHTML = '<span>Complete a real conversation in Explore to see your pattern map.</span>';
+        }
+    }
+
+    async function loadInference() {
         const sessionId = K.getSessionId();
 
         if (!sessionId) {
-            evList.innerHTML = '<li class="note-card glass">Start a conversation on Explore to see what Kindling notices.</li>';
-            scores = {};
-            renderRadar();
-            renderFoot(null);
+            showEmptyState("Start a conversation on Explore first to reveal your pattern map.");
             return;
         }
 
         try {
-
             const response = await fetch(`${K.API_BASE_URL}/api/chat/inference/${sessionId}`);
 
             if (response.status === 404) {
                 const body = await response.json().catch(() => null);
-                evList.innerHTML = `<li class="note-card glass">${esc(body?.detail || 'Patterns are not available yet. Please complete the chat first.')}</li>`;
-                scores = {};
-                renderRadar();
-                renderFoot(null);
+                showEmptyState(body?.detail || "We need a little more to go on! Share a few real details about your hobbies or interests in Explore.");
                 return;
             }
 
@@ -165,34 +168,31 @@
             const data = await response.json();
 
             if (data.inference_failed) {
-                evList.innerHTML = '<li class="note-card glass">Scoring did not complete cleanly for this session. Keep exploring and check back.</li>';
-                scores = {};
-                renderRadar();
-                renderFoot(null);
+                showEmptyState("Scoring did not complete cleanly for this session. Keep exploring and check back.");
                 return;
             }
 
             scores = data.inference || {};
+
+            // CHECK: Is there any real signal? (Highest score must be at least 0.15)
+            const maxScore = Math.max(...Object.values(scores).map(v => Number(v) || 0));
+            if (maxScore < 0.15) {
+                showEmptyState("We haven't detected strong interest patterns yet. Tell Kindling about a hobby, project, or activity you enjoy in Explore!");
+                return;
+            }
+
+            // Real signal exists — render radar and evidence list!
             renderRadar();
             renderEvidence();
             renderFoot(null);
 
-        }
-
-        catch (error) {
+        } catch (error) {
             console.error('Failed to load inference:', error);
-            evList.innerHTML = '<li class="note-card glass">We could not reach the server. Please try again.</li>';
+            showEmptyState("We could not reach the server. Please try again.");
         }
-
     }
 
     K.onRoute.inference = () => {
-        /*
-         * Refetch every visit, not just once: patterns can
-         * genuinely change as the user answers more questions
-         * on Explore, so a one-time cache would show stale
-         * data after they come back from adding more.
-         */
         loadInference();
     };
 

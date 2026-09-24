@@ -37,13 +37,6 @@
     let isLoading = false;
     let started = false;
 
-    /*
-     * The occupation just viewed on Career Graph (if any), kept in
-     * memory for the rest of this Explore visit so every message —
-     * not just the first — is actually grounded for the backend LLM
-     * call (see backend/main.py's build_context_note). Cleared on
-     * "New thread" so starting over doesn't stay hijacked.
-     */
     let activeContext = null;
 
     const scrollFeed = () => { feed.scrollTop = feed.scrollHeight; };
@@ -69,15 +62,34 @@
         scrollFeed();
     }
 
-    /*
-     * Only ever shown after deleting the last remaining thread —
-     * every other entry point (first visit, "New thread") keeps
-     * Kindling's real Kindling-initiated flow (it asks first)
-     * unchanged. No session exists yet here; sendMessage() lazily
-     * starts one the moment the user actually sends something,
-     * which is also what keeps this consistent with "a thread isn't
-     * real until its first message is sent."
-     */
+    /* Helper: Formats AI responses into scannable HTML with bold emphasis and clean lists */
+    function formatResponseHtml(text) {
+        if (!text) return '';
+
+        // 1. Convert markdown **bold** to <strong> tags with a gold accent
+        let formatted = esc(text).replace(/\*\*(.*?)\*\*/g, '<strong style="color:#f5c46a; font-weight:600;">$1</strong>');
+
+        // 2. Split into paragraphs based on blank lines
+        const blocks = formatted.split(/\n\n+/);
+
+        return blocks.map(block => {
+            const lines = block.split('\n');
+            const isBulletList = lines.length > 0 && lines.every(l => {
+                const trimmed = l.trim();
+                return trimmed === '' || trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.startsWith('* ');
+            });
+
+            if (isBulletList && lines.some(l => l.trim() !== '')) {
+                const listItems = lines
+                    .filter(l => l.trim() !== '')
+                    .map(l => `<li style="margin-bottom:6px; line-height:1.4;">${l.trim().replace(/^[-•*]\s*/, '')}</li>`)
+                    .join('');
+                return `<ul style="margin:8px 0; padding-left:18px; list-style-type:disc;">${listItems}</ul>`;
+            }
+            return `<p style="margin-bottom:8px; line-height:1.5;">${block.replace(/\n/g, '<br>')}</p>`;
+        }).join('');
+    }
+
     function renderEmptyFeedState() {
         feed.innerHTML = `<div class="feed-empty">
       <span class="k-mark" aria-hidden="true"><svg><use href="#spark"/></svg></span>
@@ -97,11 +109,6 @@
         }));
     }
 
-    /*
-     * `chips` can be: true (the 4 generic starters), an array of
-     * specific prompt strings (e.g. one real, occupation-grounded
-     * prompt), or omitted/false for none.
-     */
     function addKindling(text, chips) {
         const wrap = document.createElement('div');
         wrap.className = 'note-kindling';
@@ -112,7 +119,7 @@
             body.innerHTML = '<span class="typing" aria-label="Kindling is thinking"><i></i><i></i><i></i></span>';
         }
         else {
-            body.innerHTML = `<p>${esc(text)}</p>`;
+            body.innerHTML = formatResponseHtml(text);
 
             const chipList = chips === true ? starters : Array.isArray(chips) ? chips : null;
 
@@ -130,13 +137,6 @@
         return body;
     }
 
-    /*
-     * Set by career-graph.js's "Explore this in a conversation"
-     * button (kindling_context_occupation, real occupation id +
-     * title + real sample tasks — no fabricated skill tiers).
-     * Read and cleared once, so a normal later Explore visit isn't
-     * permanently hijacked by an old selection.
-     */
     function takeOccupationContext() {
         try {
             const raw = sessionStorage.getItem('kindling_context_occupation');
@@ -148,13 +148,6 @@
         }
     }
 
-    /*
-     * Like the .chip prefill in addKindling(), but each action's
-     * visible label can differ from what it actually puts in the
-     * input (e.g. a short button label that prefills a longer,
-     * real-task-grounded request). A null value just focuses the
-     * input with nothing prefilled, for "I have a question."
-     */
     function addActionRow(container, actions) {
         const row = document.createElement('div');
         row.className = 'starters';
@@ -178,26 +171,17 @@
 
         const body = addKindling(`Continuing from: ${context.title}`, false);
 
-        /*
-         * The Career Graph panel's own buttons (a specific "Questions
-         * you could ask" item, "Try it with Kindling", or the main
-         * CTA) each carry their own real, specific text — prefill
-         * that directly instead of the generic two-chip fallback
-         * below, which only applies when nothing more specific was
-         * clicked (e.g. a plain node-panel navigation).
-         */
         if (context.prefillMessage) {
             input.value = context.prefillMessage;
             sendBtn.disabled = false;
+            autoGrowInput();
+
             input.focus();
+            const len = input.value.length;
+            try { input.setSelectionRange(len, len); } catch (e) {}
             return;
         }
 
-        /*
-         * Grounded in the occupation's real sample_tasks (already
-         * loaded from career_graph.json via the career graph
-         * endpoint) — never an invented generic exercise.
-         */
         const realTask = Array.isArray(context.tasks) && context.tasks.length
             ? context.tasks[0]
             : null;
@@ -221,11 +205,6 @@
         scrollFeed();
     }
 
-    /*
-     * "Today" / "Yesterday" / "Sep 21" for the row's own label, plus
-     * which section it belongs under — both derived from the same
-     * day-difference so they can never disagree with each other.
-     */
     function describeSession(createdAt) {
         const created = new Date(createdAt);
         const dayStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
@@ -338,7 +317,6 @@
         });
     }
 
-    /* ---- row "⋯" menu: open/close + keyboard nav ---- */
     let openThreadMenu = null;
 
     function closeThreadMenu(menuBtn, menu) {
@@ -385,7 +363,6 @@
         }
     });
 
-    /* ---- pin ---- */
     async function togglePin(session) {
         const token = K.getAuthToken();
         if (!token) return;
@@ -414,9 +391,6 @@
         }
     }
 
-    /* ---- delete, with a client-side undo window (no backend delay —
-       the real DELETE call only ever fires once, after the toast
-       expires with no Undo click) ---- */
     let pendingDeleteSession = null;
     let pendingDeleteTimer = null;
     let pendingDeleteUndone = false;
@@ -492,11 +466,6 @@
         }
     }
 
-    /*
-     * No rename here: it has no real backend endpoint, and faking
-     * one would violate the same rule this whole feature respects —
-     * hide an action rather than pretend it works.
-     */
     async function fetchThreadsRaw() {
         const token = K.getAuthToken();
         if (!token) return [];
@@ -618,9 +587,9 @@
 
             feed.innerHTML = '';
 
-            showOccupationContext(context);
-
             addKindling(data.opening_question || "What have you been curious about lately?", true);
+
+            showOccupationContext(context);
 
             questionIndex = 1;
             updateProgress();
@@ -676,9 +645,6 @@
         if (!text || isLoading) return;
 
         if (!K.getSessionId()) {
-            // Post-delete empty state: nothing exists yet. Start a
-            // real thread first (Kindling's real opening question),
-            // then send this as the actual first turn.
             await startConversation();
             if (!K.getSessionId()) return;
         }
@@ -712,7 +678,7 @@
 
             const data = await response.json();
 
-            pending.innerHTML = data.reply ? `<p>${esc(data.reply)}</p>` : '';
+            pending.innerHTML = data.reply ? formatResponseHtml(data.reply) : '';
 
             if (typeof data.question_index === 'number') questionIndex = data.question_index;
             if (typeof data.total_questions === 'number') totalQuestions = data.total_questions;
@@ -720,12 +686,6 @@
             updateProgress();
             scrollFeed();
 
-            /*
-             * Refreshes the row's label once it stops being "New
-             * conversation" (set the moment this session's first
-             * real message lands) — cheap enough at this scale to
-             * just do on every turn rather than track first-turn.
-             */
             loadThreads();
 
         }
@@ -755,8 +715,6 @@
     });
 
     input.addEventListener('keydown', e => {
-        // Shift+Enter inserts a newline (textarea default); plain
-        // Enter sends, but never mid-IME-composition (e.isComposing).
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
             e.preventDefault();
             sendMessage(input.value);
@@ -766,16 +724,6 @@
     form.addEventListener('submit', e => { e.preventDefault(); sendMessage(input.value); });
 
     $('#newThread').addEventListener('click', async () => {
-        /*
-         * started stays true: this IS the "already initialized"
-         * state for this visit, just re-rendered fresh. Setting
-         * it false here did nothing for this call (startConversation
-         * is invoked directly, not through the guarded router) but
-         * corrupted state for later — a later hash round-trip back
-         * to #explore would see started===false and re-run
-         * onRoute.explore's restore-or-start logic on top of the
-         * session this button just created.
-         */
         K.clearSession();
         activeContext = null;
         await startConversation();
@@ -785,29 +733,25 @@
 
     K.onRoute.explore = async () => {
 
-        if (started) return;
+        const context = takeOccupationContext();
+
+        if (context) {
+            activeContext = context;
+        }
+
+        if (started && !context) return;
         started = true;
 
         loadThreads();
-
-        /*
-         * Read once regardless of which path below runs, so a
-         * career-graph selection grounds the conversation whether
-         * this lands on a brand-new session or an existing one.
-         * Kept in activeContext (not just used for the "Continuing
-         * from" card) so sendMessage() actually sends it to the
-         * backend on every turn of this conversation, not just
-         * cosmetically in the UI.
-         */
-        const context = takeOccupationContext();
-        activeContext = context;
 
         const existingSessionId = K.getSessionId();
 
         if (existingSessionId) {
             const restored = await restoreSession(existingSessionId);
             if (restored) {
-                showOccupationContext(context);
+                if (context) {
+                    showOccupationContext(context);
+                }
                 return;
             }
         }
