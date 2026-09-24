@@ -1,7 +1,7 @@
 # Kindling API Documentation
 
-**Base URL:** `http://127.0.0.1:8000`  
-**Swagger UI:** `http://127.0.0.1:8000/docs`  
+**Base URL:** `https://kindling-backend.onrender.com`  
+**Swagger UI:** `https://kindling-backend.onrender.com/docs`  
 **Database:** SQLite (`kindling.db`)  
 **Backend Owner:** Priya
 

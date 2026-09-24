@@ -11,7 +11,7 @@
 
     const K = window.Kindling;
 
-    K.API_BASE_URL = 'http://127.0.0.1:8000';
+    K.API_BASE_URL = 'https://kindling-backend.onrender.com';
 
     const SESSION_KEY = 'kindling_session_id';
     const PERSIST_KEY = 'kindling_persist_session';
