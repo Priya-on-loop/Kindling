@@ -207,6 +207,15 @@ app.add_middleware(
 def startup():
     init_db()
 
+@app.get("/")
+@app.get("/health")
+def root_health():
+    return {
+        "status": "ok",
+        "service": "Kindling Backend API",
+        "docs": "https://kindling-backend.onrender.com/docs"
+    }
+
 # ── Schemas ───────────────────────────────────────────────────
 
 class StartRequest(BaseModel):
