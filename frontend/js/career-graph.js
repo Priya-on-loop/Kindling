@@ -1,0 +1,629 @@
+/* =========================================================
+   CAREER GRAPH — real branching tree (Phase 4 of the star->tree
+   rebuild; see backend/career_tree.py, tree_enrichment.py,
+   Tests/test_career_tree.py for the deterministic build + AI
+   naming layers this renders).
+
+   Real endpoint: GET /api/career-tree/{session_id}, returning
+   {nodes, edges} exactly per the master prompt's API contract —
+   the backend decides every node/edge that exists; this file only
+   lays them out radially and renders them. It never invents a
+   node, a parent link, a cross-link, or panel text.
+
+   Layout, hover/selection dimming, the "Show everything / Only
+   what I've opened" filter, and every detail-panel section below
+   are adapted directly from the approved mockup's own 2-ring
+   (hub->area->leaf) implementation, extended to the real 3-ring
+   hierarchy (hub->area->field->career) Part D actually specifies.
+   ========================================================= */
+
+(() => {
+
+    const K = window.Kindling;
+    const { $, $$, el, esc, lc, colorOf, addGlow, drawNode, onActivate, toast } = K;
+
+    const gsvg = $('#graphMap'), frame = $('#graphFrame');
+    let layer = $('#graphLayer');
+    const gGlow = addGlow(gsvg, 5);
+    gsvg.setAttribute('viewBox', '-540 -480 1080 960');
+
+    const panel = $('#graphPanel');
+
+    let treeNodes = [], treeEdges = [];
+    let byId = {};
+    let childrenOf = {};
+    let neighbors = {};
+    let nodeEls = {};
+    let edgeEls = [];
+    let selected = null;
+    let opened = new Set();
+    let graphFilter = 'all';
+
+    const AREA_R = 175, FIELD_R = 265, CAREER_R = 350;
+
+    /* Long labels on the map itself become the short display title;
+       the full real label is always still shown via a tooltip and
+       the detail panel's own heading — never lost, just not drawn
+       at full length on the star map. */
+    function mapLabel(label) {
+        return label && label.length > 22 ? label.slice(0, 21).trimEnd() + '…' : label;
+    }
+
+    const kindName = {
+        hub: 'Center of your exploration', area: 'Area of interest',
+        field: 'Related field', career: 'Possible direction'
+    };
+    const branchSectionLabel = {
+        hub: 'Areas branching from here', area: 'Fields branching from here', field: 'Careers branching from here'
+    };
+    const LETTER_TO_AXIS = {
+        R: 'builds_tinkers', I: 'investigates_why', A: 'creates_expresses',
+        S: 'works_with_people', E: 'leads_persuades', C: 'organizes_systems'
+    };
+
+    function renderEmpty(message) {
+        panel.innerHTML = `<p class="eyebrow">Career graph</p><h2 class="display">A universe<br>of possibilities</h2><p class="lede">${esc(message)}</p>`;
+    }
+
+    async function loadTree() {
+
+        const sessionId = K.getSessionId();
+
+        if (!sessionId) {
+            renderEmpty('Start a conversation on Explore to see directions connected to your exploration.');
+            return;
+        }
+
+        try {
+
+            const response = await fetch(`${K.API_BASE_URL}/api/career-tree/${sessionId}`);
+
+            if (response.status === 404) {
+                const body = await response.json().catch(() => null);
+                renderEmpty(body?.detail || 'Career directions are not available yet. Please complete the chat first.');
+                return;
+            }
+
+            if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+            const data = await response.json();
+            treeNodes = data.nodes || [];
+            treeEdges = data.edges || [];
+
+            if (treeNodes.length <= 1) {
+                renderEmpty('No directions found yet.');
+                return;
+            }
+
+            buildGraph();
+            renderOverview();
+
+        }
+
+        catch (error) {
+            console.error('Failed to load career tree:', error);
+            renderEmpty("We couldn't reach the server. Please try again.");
+        }
+
+    }
+
+    /*
+     * How many real career leaves sit under a node — used to size
+     * each area/field's angular sector proportionally, per the
+     * master prompt's "each area gets a sector proportional to its
+     * number of leaf careers" rule, applied at every ring.
+     */
+    function leafCount(id) {
+        const kids = childrenOf[id];
+        if (!kids || !kids.length) return 1;
+        return kids.reduce((sum, k) => sum + leafCount(k), 0);
+    }
+
+    function layoutTree() {
+
+        const hub = byId.you;
+        hub.x = 0; hub.y = 0;
+
+        const areaIds = childrenOf.you || [];
+        const FULL = Math.PI * 2;
+        const areaWeights = areaIds.map(leafCount);
+        const totalWeight = areaWeights.reduce((a, b) => a + b, 0) || 1;
+
+        let cursor = -Math.PI / 2;
+
+        areaIds.forEach((areaId, i) => {
+
+            const width = FULL * areaWeights[i] / totalWeight;
+            const centerAng = cursor + width / 2;
+            cursor += width;
+
+            const areaNode = byId[areaId];
+            areaNode.ang = centerAng;
+            areaNode.x = Math.cos(centerAng) * AREA_R;
+            areaNode.y = Math.sin(centerAng) * AREA_R;
+
+            const fieldIds = childrenOf[areaId] || [];
+            const fieldWeights = fieldIds.map(leafCount);
+            const fieldTotalWeight = fieldWeights.reduce((a, b) => a + b, 0) || 1;
+            const areaSpread = width * 0.88;
+            let fieldCursor = centerAng - areaSpread / 2;
+
+            fieldIds.forEach((fieldId, j) => {
+
+                const fWidth = areaSpread * fieldWeights[j] / fieldTotalWeight;
+                const fCenterAng = fieldCursor + fWidth / 2;
+                fieldCursor += fWidth;
+
+                const fieldNode = byId[fieldId];
+                fieldNode.ang = fCenterAng;
+                /*
+                 * Real testing (dense clusters like "Works with
+                 * people") showed the field ring is where the worst
+                 * label collisions happen — field names are often the
+                 * longest on the map, sitting closest together. A
+                 * 3-tier radius cycle (not just alternating) gives
+                 * angularly-adjacent siblings real separation instead
+                 * of just alternating between two close radii.
+                 */
+                const fr = FIELD_R + (j % 3) * 34;
+                fieldNode.x = Math.cos(fCenterAng) * fr;
+                fieldNode.y = Math.sin(fCenterAng) * fr;
+
+                const careerIds = childrenOf[fieldId] || [];
+                const fieldSpread = fWidth * 0.92;
+                const m = careerIds.length;
+
+                careerIds.forEach((careerId, k) => {
+                    const t = m === 1 ? 0 : (k / (m - 1)) - 0.5;
+                    const cAng = fCenterAng + t * fieldSpread;
+                    const careerNode = byId[careerId];
+                    careerNode.ang = cAng;
+                    // 3-tier radius cycle, same reasoning as fields above.
+                    const r = CAREER_R + (k % 3) * 40;
+                    careerNode.x = Math.cos(cAng) * r;
+                    careerNode.y = Math.sin(cAng) * r;
+                });
+
+            });
+
+        });
+
+    }
+
+    function buildGraph() {
+
+        layer.remove();
+        layer = el('g', { id: 'graphLayer' }, gsvg);
+
+        byId = {}; childrenOf = {}; neighbors = {}; nodeEls = {}; edgeEls = [];
+
+        treeNodes.forEach(n => { byId[n.id] = { ...n }; });
+        treeEdges.filter(e => e.kind === 'branch').forEach(e => {
+            (childrenOf[e.source] = childrenOf[e.source] || []).push(e.target);
+        });
+        treeNodes.forEach(n => { neighbors[n.id] = new Set([n.id]); });
+        treeEdges.forEach(e => {
+            neighbors[e.source]?.add(e.target);
+            neighbors[e.target]?.add(e.source);
+        });
+
+        layoutTree();
+
+        const edgeLayer = el('g', {}, layer);
+        treeEdges.forEach(e => {
+            const P = byId[e.source], Q = byId[e.target];
+            if (!P || !Q) return;
+            const mx = (P.x + Q.x) / 2 + (Q.y - P.y) * 0.1;
+            const my = (P.y + Q.y) / 2 - (Q.x - P.x) * 0.1;
+            const isCross = e.kind === 'cross';
+            const stroke = isCross ? 'var(--muted)' : colorOf[Q.type];
+            const path = el('path', {
+                class: 'edge ' + (isCross ? 'cross' : 'branch'),
+                d: `M${P.x} ${P.y} Q${mx} ${my} ${Q.x} ${Q.y}`,
+                stroke
+            }, edgeLayer);
+            edgeEls.push({ e, path });
+        });
+
+        const SIZES = {
+            area: { core: 5, halo: 16, thresh: 0.3, lx: 14, ly: 18 },
+            field: { core: 4, halo: 12, thresh: 0.28, lx: 11, ly: 15 },
+            career: { core: 3, halo: 9, thresh: 0.25, lx: 9, ly: 12 }
+        };
+
+        const nodeLayer = el('g', {}, layer);
+        treeNodes.forEach(n => {
+            const node = byId[n.id];
+            let opts;
+
+            if (node.type === 'hub') {
+                opts = { core: 7, halo: 30, lx: 0, ly: 34, anchor: 'middle', cls: 'hub' };
+            }
+            else {
+                const s = SIZES[node.type] || SIZES.career;
+                const c = Math.cos(node.ang || 0), sn = Math.sin(node.ang || 0);
+                opts = {
+                    core: s.core, halo: s.halo, cls: node.type,
+                    anchor: c > s.thresh ? 'start' : c < -s.thresh ? 'end' : 'middle',
+                    lx: c > s.thresh ? s.lx : c < -s.thresh ? -s.lx : 0,
+                    ly: Math.abs(c) <= s.thresh ? (sn < 0 ? -s.ly : s.ly + 6) : 4
+                };
+            }
+
+            const g = drawNode(nodeLayer, node, gGlow, opts);
+            nodeEls[n.id] = g;
+            if (opened.has(n.id)) g.classList.add('visited');
+
+            /*
+             * Long labels use the short display title on the map
+             * itself, with the real full label always available via
+             * a native tooltip (and, already, the detail panel's own
+             * <h2>) — aria-label on the node group stays the full
+             * real text regardless, since drawNode() set that from
+             * node.label before any truncation happens here.
+             */
+            if (node.type !== 'hub') {
+                const truncated = mapLabel(node.label);
+                if (truncated !== node.label) {
+                    const textEl = g.querySelector('text');
+                    if (textEl) textEl.textContent = truncated;
+                }
+                el('title', {}, g).textContent = node.label;
+            }
+
+            g.addEventListener('mouseenter', () => light(n.id));
+            g.addEventListener('mouseleave', () => light(selected));
+            g.addEventListener('focus', () => light(n.id));
+            g.addEventListener('blur', () => light(selected));
+            onActivate(g, () => { if (!dragMoved) selectNode(n.id); });
+        });
+
+        resolveLabelCollisions();
+        applyFilter();
+
+    }
+
+    /*
+     * Real collision pass (Part G): the tiered radius stagger above
+     * is a reasonable starting layout, but real testing showed it
+     * still leaves genuine overlaps in dense clusters — some fields
+     * have too few siblings for a stagger cycle to separate them at
+     * all. This measures each label's REAL rendered bounding box
+     * (SVG getBBox(), in world coordinates via each node's own
+     * translate) and, for any two field or career labels that
+     * actually overlap, pushes the outer one further out along its
+     * own angle until they don't. Runs a few passes since pushing
+     * one node out can newly overlap a different neighbor.
+     */
+    const LABEL_MARGIN = 7;
+
+    function labelWorldBox(node, g) {
+        const textEl = g.querySelector('text');
+        if (!textEl) return null;
+        const box = textEl.getBBox();
+        return {
+            left: box.x + node.x - LABEL_MARGIN, right: box.x + box.width + node.x + LABEL_MARGIN,
+            top: box.y + node.y - LABEL_MARGIN, bottom: box.y + box.height + node.y + LABEL_MARGIN
+        };
+    }
+
+    function boxesOverlap(a, b) {
+        return !(a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top);
+    }
+
+    function resolveLabelCollisions() {
+        {
+            // One combined pass across BOTH rings — a field label and a
+            // career label from a different branch can sit just as
+            // close together as two siblings in the same ring (found
+            // in real testing: "Computer and Mathematical Occupations"
+            // the field literally overlapped "Computer Systems
+            // Analyst" the career, since FIELD_R and CAREER_R aren't
+            // far apart relative to real label widths).
+            const items = treeNodes
+                .filter(n => n.type === 'field' || n.type === 'career')
+                .map(n => ({ node: byId[n.id], g: nodeEls[n.id] }))
+                .filter(it => it.g);
+
+            for (let pass = 0; pass < 14; pass++) {
+                let changed = false;
+
+                for (let i = 0; i < items.length; i++) {
+                    for (let j = i + 1; j < items.length; j++) {
+                        const a = items[i], b = items[j];
+                        const boxA = labelWorldBox(a.node, a.g), boxB = labelWorldBox(b.node, b.g);
+                        if (!boxA || !boxB || !boxesOverlap(boxA, boxB)) continue;
+
+                        const target = Math.hypot(a.node.x, a.node.y) >= Math.hypot(b.node.x, b.node.y) ? a : b;
+                        const other = target === a ? b : a;
+
+                        // Push both outward (radius) and away from the
+                        // other node's angle (bearing) — a same-angle
+                        // pair only separates radially; a same-radius
+                        // pair only separates angularly, so real
+                        // overlaps need both levers, not just one.
+                        const angDiff = (target.node.ang ?? 0) - (other.node.ang ?? 0);
+                        const angPush = angDiff === 0 ? 0.03 : Math.sign(angDiff) * 0.03;
+                        const newAng = (target.node.ang ?? 0) + angPush;
+                        const newR = Math.hypot(target.node.x, target.node.y) + 16;
+
+                        target.node.ang = newAng;
+                        target.node.x = Math.cos(newAng) * newR;
+                        target.node.y = Math.sin(newAng) * newR;
+                        target.g.setAttribute('transform', `translate(${target.node.x} ${target.node.y})`);
+                        changed = true;
+                    }
+                }
+
+                if (!changed) break;
+            }
+        }
+
+        // Branch edges follow their endpoints' positions, so redraw
+        // them after any collision-driven moves above.
+        edgeEls.forEach(({ e, path }) => {
+            const P = byId[e.source], Q = byId[e.target];
+            if (!P || !Q) return;
+            const mx = (P.x + Q.x) / 2 + (Q.y - P.y) * 0.1;
+            const my = (P.y + Q.y) / 2 - (Q.x - P.x) * 0.1;
+            path.setAttribute('d', `M${P.x} ${P.y} Q${mx} ${my} ${Q.x} ${Q.y}`);
+        });
+    }
+
+    function light(id) {
+        gsvg.classList.toggle('is-focused', !!id);
+        const set = id ? (neighbors[id] || new Set()) : new Set();
+        Object.entries(nodeEls).forEach(([k, g]) => g.classList.toggle('is-lit', set.has(k)));
+        edgeEls.forEach(({ e, path }) => path.classList.toggle('is-lit', !!id && (e.source === id || e.target === id)));
+    }
+
+    const chip = id => {
+        const n = byId[id];
+        if (!n) return '';
+        return `<li><button data-go="${id}"><i style="background:${colorOf[n.type]}"></i>${esc(n.label)}</button></li>`;
+    };
+
+    function linkItem(fromId, toId) {
+        const n = byId[toId];
+        if (!n) return '';
+        const edge = treeEdges.find(e => e.kind === 'cross' &&
+            ((e.source === fromId && e.target === toId) || (e.source === toId && e.target === fromId)));
+        const reason = edge?.reason || '';
+        return `<li><button data-go="${toId}"><i style="background:${colorOf[n.type]}"></i>${esc(n.label)}</button>${reason ? `<p class="link-reason">${esc(reason)}</p>` : ''}</li>`;
+    }
+
+    /* Real ancestor chain (area -> field for a career), excluding the
+       hub — matches the approved mockup's own breadcrumb rule. */
+    function breadcrumbFor(node) {
+        const chain = [];
+        let p = node.parent ? byId[node.parent] : null;
+        while (p && p.type !== 'hub') {
+            chain.unshift(p);
+            p = p.parent ? byId[p.parent] : null;
+        }
+        return chain;
+    }
+
+    function renderOverview() {
+        const areaIds = childrenOf.you || [];
+        panel.innerHTML = `
+      <p class="eyebrow">Career graph</p>
+      <h2 class="display">A universe<br>of possibilities</h2>
+      <p class="lede">Fields and careers connected to what you've been curious about. Select any star to explore it here.</p>
+      <div class="panel-block">
+        <p class="section-label">How to read the map</p>
+        <ul class="legend">
+          <li><i class="dot-hub"></i>The center of your exploration</li>
+          <li><i class="dot-area"></i>Areas of interest</li>
+          <li><i class="dot-related"></i>Related fields</li>
+          <li><i class="dot-direction"></i>Possible directions</li>
+        </ul>
+      </div>
+      ${areaIds.length ? `<div class="panel-block"><p class="section-label">Start with an area</p><ul class="jump-list">${areaIds.map(chip).join('')}</ul></div>` : ''}
+      <p class="whisper" style="margin-top:30px">Many paths. One curious you.</p>`;
+    }
+
+    function renderNode(id) {
+
+        const node = byId[id];
+        const color = colorOf[node.type];
+        const crumbs = breadcrumbFor(node);
+        const kids = childrenOf[id] || [];
+        const related = [...(neighbors[id] || [])].filter(nid => nid !== id && nid !== node.parent && !kids.includes(nid));
+
+        const wasOpenedBefore = opened.has(id) && selected !== id;
+
+        const qs = node.type === 'career'
+            ? [`What does a day as a ${lc(node.label)} look like?`, `How do people get into ${lc(node.label)} work?`]
+            : [`What questions does ${lc(node.label)} try to answer?`, `How is ${lc(node.label)} connected to what I've explored?`];
+
+        const parentNode = node.parent ? byId[node.parent] : null;
+        const why = node.why || (parentNode ? `Branches from ${parentNode.label}.${parentNode.why ? ' ' + parentNode.why : ''}` : '');
+
+        const branchLabel = branchSectionLabel[node.type];
+
+        panel.innerHTML = `
+      <button class="link-btn" data-overview>
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M11 6H2M5.5 2.5 2 6l3.5 3.5" stroke="currentColor" stroke-width="1.3" fill="none"/></svg>Back to the whole map</button>
+      <p class="node-kind"><i style="background:${color};box-shadow:0 0 8px ${color}"></i>${kindName[node.type] || ''}</p>
+      <h2 class="node-title">${esc(node.label)}</h2>
+      ${crumbs.length ? `<p class="node-path">${crumbs.map(c => `<button data-go="${c.id}">${esc(c.label)}</button>`).join(' &rarr; ')} &rarr; ${esc(node.label)}</p>` : ''}
+      ${node.description ? `<div class="panel-block"><p>${esc(node.description)}</p></div>` : ''}
+      ${wasOpenedBefore ? `<p class="seen-note"><svg width="10" height="10" aria-hidden="true"><use href="#spark"/></svg>You've opened this before</p>` : ''}
+      ${node.tasks?.length ? `<div class="panel-block"><p class="section-label">What the work looks like</p><ul class="task-list">${node.tasks.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
+      ${node.tryIt ? `<div class="panel-block"><p class="section-label">Try it out</p><div class="try-card"><p>${esc(node.tryIt.text)}</p>
+        <button class="btn-line" data-ask="I want to try this small task: ${esc(node.tryIt.text)} Can you walk me through it?">Try it with Kindling</button></div></div>` : ''}
+      ${why ? `<div class="panel-block"><p class="section-label">Connected to your exploration</p><p>${esc(why)}</p></div>` : ''}
+      ${kids.length ? `<div class="panel-block"><p class="section-label">${branchLabel}</p><ul class="jump-list">${kids.map(chip).join('')}</ul></div>` : ''}
+      ${related.length ? `<div class="panel-block"><p class="section-label">Also linked to</p><ul class="link-list">${related.map(rid => linkItem(id, rid)).join('')}</ul></div>` : ''}
+      <div class="panel-block"><p class="section-label">Questions you could ask</p>
+        <ul class="q-list">${qs.map(q => `<li><button data-ask="${esc(q)}">${esc(q)}<svg width="12" height="12"><use href="#arrow"/></svg></button></li>`).join('')}</ul></div>
+      <div class="panel-cta"><button class="btn-gold sm" data-ask="Tell me more about ${esc(lc(node.label))}.">Explore this in a conversation</button></div>`;
+        panel.scrollTop = 0;
+
+    }
+
+    /*
+     * "Time spent exploring" on Reflection sums real dwell time per
+     * real area (see reflection.js + backend/main.py's node_time
+     * events) — logged through the existing POST /api/events/log
+     * endpoint. areaAxisFor() walks up to whichever real area a
+     * node sits under (or is itself), so field/career dwell time
+     * still attributes correctly to its real ancestor area.
+     */
+    let activeArea = null, activeStartedAt = null;
+
+    function areaAxisFor(id) {
+        let n = byId[id];
+        while (n && n.type !== 'area') n = n.parent ? byId[n.parent] : null;
+        return n ? LETTER_TO_AXIS[n.riasec] : null;
+    }
+
+    function logNodeTime(area, startedAt, endedAt) {
+        const sessionId = K.getSessionId();
+        if (!sessionId || !area || endedAt - startedAt < 500) return;
+
+        fetch(`${K.API_BASE_URL}/api/events/log`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: sessionId,
+                event_type: 'node_time',
+                event_data: {
+                    area,
+                    startedAt: new Date(startedAt).toISOString(),
+                    endedAt: new Date(endedAt).toISOString()
+                }
+            })
+        }).catch(() => {});
+    }
+
+    function closeActiveNodeTimer() {
+        if (activeArea && activeStartedAt) logNodeTime(activeArea, activeStartedAt, Date.now());
+        activeArea = null;
+        activeStartedAt = null;
+    }
+
+    addEventListener('hashchange', () => { if (location.hash !== '#graph') closeActiveNodeTimer(); });
+    addEventListener('beforeunload', closeActiveNodeTimer);
+
+    function selectNode(id) {
+        closeActiveNodeTimer();
+
+        selected = id;
+
+        if (id) {
+            opened.add(id);
+            nodeEls[id]?.classList.add('visited');
+            if (graphFilter === 'opened') applyFilter();
+        }
+
+        Object.entries(nodeEls).forEach(([k, g]) => g.classList.toggle('is-selected', k === id));
+        light(id);
+
+        if (id) {
+            renderNode(id);
+            activeArea = areaAxisFor(id);
+            activeStartedAt = Date.now();
+        }
+        else renderOverview();
+    }
+
+    panel.addEventListener('click', e => {
+
+        const goBtn = e.target.closest('[data-go]');
+        if (goBtn) return selectNode(goBtn.dataset.go);
+
+        if (e.target.closest('[data-overview]')) return selectNode(null);
+
+        const askBtn = e.target.closest('[data-ask]');
+        if (askBtn) {
+            /*
+             * Every data-ask button (the main CTA, "Try it with
+             * Kindling", and each "Questions you could ask" item)
+             * carries real, node-specific text. Carry the real node
+             * (occupation title/description/tasks when it's a
+             * career; just the real area/field label otherwise) plus
+             * that exact clicked text into Explore, so the next
+             * conversation opens already grounded and prefilled
+             * instead of generic. explore.js reads this once and
+             * clears it immediately after use.
+             */
+            const node = selected ? byId[selected] : null;
+
+            if (node) {
+                try {
+                    sessionStorage.setItem('kindling_context_occupation', JSON.stringify({
+                        id: node.soc || node.id,
+                        title: node.fullTitle || node.label,
+                        description: node.description || null,
+                        tasks: node.tasks || null,
+                        prefillMessage: askBtn.dataset.ask
+                    }));
+                }
+                catch (error) {}
+            }
+
+            location.hash = 'explore';
+        }
+
+    });
+
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.dataset.page === 'graph' && selected) selectNode(null); });
+
+    /* "Show everything" / "Only what I've opened" */
+    function applyFilter() {
+        const keep = new Set(['you']);
+        if (graphFilter === 'opened') {
+            opened.forEach(id => {
+                keep.add(id);
+                let p = byId[id]?.parent;
+                while (p) { keep.add(p); p = byId[p]?.parent; }
+            });
+        }
+        Object.entries(nodeEls).forEach(([id, g]) => g.classList.toggle('is-hidden', graphFilter === 'opened' && !keep.has(id)));
+        edgeEls.forEach(({ e, path }) => path.classList.toggle('is-hidden', graphFilter === 'opened' && !(keep.has(e.source) && keep.has(e.target))));
+    }
+
+    $$('.graph-filter [role=radio]').forEach(b => b.addEventListener('click', () => {
+        graphFilter = b.dataset.filter;
+        $$('.graph-filter [role=radio]').forEach(x => x.setAttribute('aria-checked', String(x === b)));
+        applyFilter();
+        if (graphFilter === 'opened' && !opened.size) toast("Open a star first, and it will show up here");
+    }));
+
+    /* pan + zoom (kept from the mockup, unchanged) */
+    let view = { x: 0, y: 0, k: 1 };
+    const applyView = () => layer.setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
+    const svgPoint = (cx, cy) => {
+        const r = gsvg.getBoundingClientRect(), vb = gsvg.viewBox.baseVal;
+        const s = Math.max(vb.width / r.width, vb.height / r.height);
+        return { x: vb.x + vb.width / 2 + (cx - r.left - r.width / 2) * s, y: vb.y + vb.height / 2 + (cy - r.top - r.height / 2) * s, s };
+    };
+    function zoomAt(f, px = 0, py = 0) {
+        const k = Math.min(3, Math.max(0.6, view.k * f)); f = k / view.k;
+        view.x = px - (px - view.x) * f; view.y = py - (py - view.y) * f; view.k = k; applyView();
+    }
+    frame.addEventListener('wheel', e => { e.preventDefault(); const p = svgPoint(e.clientX, e.clientY); zoomAt(e.deltaY < 0 ? 1.12 : 1 / 1.12, p.x, p.y); }, { passive: false });
+    $('#zoomIn').addEventListener('click', () => zoomAt(1.25));
+    $('#zoomOut').addEventListener('click', () => zoomAt(0.8));
+    const fitK = () => (frame.clientWidth && frame.clientWidth < 600 ? 1.3 : 1);
+    $('#zoomFit').addEventListener('click', () => { view = { x: 0, y: 0, k: fitK() }; applyView(); });
+
+    let drag = null, dragMoved = false;
+    frame.addEventListener('pointerdown', e => { if (e.target.closest('.graph-tools, .graph-filter')) return; drag = { sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y }; dragMoved = false; });
+    addEventListener('pointermove', e => {
+        if (!drag) return;
+        const s = svgPoint(0, 0).s, dx = (e.clientX - drag.sx) * s, dy = (e.clientY - drag.sy) * s;
+        if (!dragMoved && Math.hypot(dx, dy) < 5) return;
+        if (!dragMoved) { dragMoved = true; frame.classList.add('is-panning'); }
+        view.x = drag.ox + dx; view.y = drag.oy + dy; applyView();
+    });
+    addEventListener('pointerup', () => { if (!drag) return; drag = null; frame.classList.remove('is-panning'); setTimeout(() => { dragMoved = false; }, 0); });
+
+    K.onRoute.graph = () => {
+        loadTree();
+        requestAnimationFrame(() => { view.k = fitK(); applyView(); });
+    };
+
+})();

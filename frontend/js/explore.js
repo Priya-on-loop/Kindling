@@ -1,0 +1,819 @@
+/* =========================================================
+   EXPLORE — real chat
+   Real endpoints only: POST /api/chat/start, POST
+   /api/chat/message, GET /api/chat/session/{id}. Kindling's
+   real flow is Kindling-initiated (it asks the first
+   question), unlike the mockup's user-initiated empty state,
+   so the opening question is rendered as the first message
+   instead of a blank composer waiting for input.
+   ========================================================= */
+
+(() => {
+
+    const K = window.Kindling;
+    const { $, $$, esc } = K;
+
+    const feed = $('#feed'), form = $('#composer'), input = $('#ask'), sendBtn = $('.send', form);
+    const threadProgress = $('#threadProgress');
+
+    const threadsSidebar = $('#threadsSidebar'), threadsList = $('#threadsList');
+    const threadsCollapseBtn = $('#threadsCollapse'), threadsExpandBtn = $('#threadsExpand');
+    const threadsMobileToggle = $('#threadsMobileToggle'), threadsBackdrop = $('#threadsBackdrop');
+    const SIDEBAR_COLLAPSE_KEY = 'kindling_threads_collapsed';
+
+    const deleteThreadDialog = $('#deleteThreadDialog'), deleteThreadConfirmBtn = $('#deleteThreadConfirm');
+    const undoToast = $('#undoToast'), undoToastText = $('#undoToastText'), undoToastBtn = $('#undoToastBtn');
+    const MAX_PINS = 5;
+
+    const starters = [
+        'Why do people make certain choices?',
+        'How do technologies change our lives?',
+        'What makes a good leader?',
+        'Why do some ideas spread?'
+    ];
+
+    let questionIndex = 1;
+    let totalQuestions = 7;
+    let isLoading = false;
+    let started = false;
+
+    /*
+     * The occupation just viewed on Career Graph (if any), kept in
+     * memory for the rest of this Explore visit so every message —
+     * not just the first — is actually grounded for the backend LLM
+     * call (see backend/main.py's build_context_note). Cleared on
+     * "New thread" so starting over doesn't stay hijacked.
+     */
+    let activeContext = null;
+
+    const scrollFeed = () => { feed.scrollTop = feed.scrollHeight; };
+
+    function updateProgress() {
+        if (!threadProgress) return;
+        threadProgress.textContent = typeof totalQuestions === 'number' && questionIndex <= totalQuestions
+            ? `Question ${questionIndex} of ${totalQuestions}`
+            : 'Open exploration';
+    }
+
+    function setLoading(loading) {
+        isLoading = loading;
+        input.disabled = loading;
+        sendBtn.disabled = loading || !input.value.trim();
+    }
+
+    function addUser(text) {
+        const d = document.createElement('div');
+        d.className = 'note-user';
+        d.textContent = text;
+        feed.appendChild(d);
+        scrollFeed();
+    }
+
+    /*
+     * Only ever shown after deleting the last remaining thread —
+     * every other entry point (first visit, "New thread") keeps
+     * Kindling's real Kindling-initiated flow (it asks first)
+     * unchanged. No session exists yet here; sendMessage() lazily
+     * starts one the moment the user actually sends something,
+     * which is also what keeps this consistent with "a thread isn't
+     * real until its first message is sent."
+     */
+    function renderEmptyFeedState() {
+        feed.innerHTML = `<div class="feed-empty">
+      <span class="k-mark" aria-hidden="true"><svg><use href="#spark"/></svg></span>
+      <h2>What's on your mind today?</h2>
+      <p>Ask anything. A question, a what-if, or something you noticed and can't stop thinking about.</p>
+      <div class="starters">${starters.map(s => `<button type="button" class="chip">${esc(s)}</button>`).join('')}</div>
+    </div>`;
+        wireChipClicks(feed);
+        threadProgress && (threadProgress.textContent = 'New thread');
+    }
+
+    function wireChipClicks(container) {
+        $$('.chip', container).forEach(c => c.addEventListener('click', () => {
+            input.value = c.textContent;
+            sendBtn.disabled = false;
+            input.focus();
+        }));
+    }
+
+    /*
+     * `chips` can be: true (the 4 generic starters), an array of
+     * specific prompt strings (e.g. one real, occupation-grounded
+     * prompt), or omitted/false for none.
+     */
+    function addKindling(text, chips) {
+        const wrap = document.createElement('div');
+        wrap.className = 'note-kindling';
+        wrap.innerHTML = '<span class="k-mark" aria-hidden="true"><svg><use href="#spark"/></svg></span><div class="k-body"></div>';
+        const body = $('.k-body', wrap);
+
+        if (text === null) {
+            body.innerHTML = '<span class="typing" aria-label="Kindling is thinking"><i></i><i></i><i></i></span>';
+        }
+        else {
+            body.innerHTML = `<p>${esc(text)}</p>`;
+
+            const chipList = chips === true ? starters : Array.isArray(chips) ? chips : null;
+
+            if (chipList && chipList.length) {
+                const chipsEl = document.createElement('div');
+                chipsEl.className = 'starters';
+                chipsEl.innerHTML = chipList.map(s => `<button type="button" class="chip">${esc(s)}</button>`).join('');
+                wireChipClicks(chipsEl);
+                body.appendChild(chipsEl);
+            }
+        }
+
+        feed.appendChild(wrap);
+        scrollFeed();
+        return body;
+    }
+
+    /*
+     * Set by career-graph.js's "Explore this in a conversation"
+     * button (kindling_context_occupation, real occupation id +
+     * title + real sample tasks — no fabricated skill tiers).
+     * Read and cleared once, so a normal later Explore visit isn't
+     * permanently hijacked by an old selection.
+     */
+    function takeOccupationContext() {
+        try {
+            const raw = sessionStorage.getItem('kindling_context_occupation');
+            sessionStorage.removeItem('kindling_context_occupation');
+            return raw ? JSON.parse(raw) : null;
+        }
+        catch (error) {
+            return null;
+        }
+    }
+
+    /*
+     * Like the .chip prefill in addKindling(), but each action's
+     * visible label can differ from what it actually puts in the
+     * input (e.g. a short button label that prefills a longer,
+     * real-task-grounded request). A null value just focuses the
+     * input with nothing prefilled, for "I have a question."
+     */
+    function addActionRow(container, actions) {
+        const row = document.createElement('div');
+        row.className = 'starters';
+        row.innerHTML = actions.map(a => `<button type="button" class="chip">${esc(a.label)}</button>`).join('');
+
+        [...row.querySelectorAll('.chip')].forEach((btn, i) => {
+            btn.addEventListener('click', () => {
+                if (actions[i].value) {
+                    input.value = actions[i].value;
+                    sendBtn.disabled = false;
+                }
+                input.focus();
+            });
+        });
+
+        container.appendChild(row);
+    }
+
+    function showOccupationContext(context) {
+        if (!context?.title) return;
+
+        const body = addKindling(`Continuing from: ${context.title}`, false);
+
+        /*
+         * The Career Graph panel's own buttons (a specific "Questions
+         * you could ask" item, "Try it with Kindling", or the main
+         * CTA) each carry their own real, specific text — prefill
+         * that directly instead of the generic two-chip fallback
+         * below, which only applies when nothing more specific was
+         * clicked (e.g. a plain node-panel navigation).
+         */
+        if (context.prefillMessage) {
+            input.value = context.prefillMessage;
+            sendBtn.disabled = false;
+            input.focus();
+            return;
+        }
+
+        /*
+         * Grounded in the occupation's real sample_tasks (already
+         * loaded from career_graph.json via the career graph
+         * endpoint) — never an invented generic exercise.
+         */
+        const realTask = Array.isArray(context.tasks) && context.tasks.length
+            ? context.tasks[0]
+            : null;
+
+        const tryPrompt = realTask
+            ? `Can you give me something small and doable I could try, connected to this: "${realTask}"?`
+            : `Can you give me something small and doable I could try, related to ${context.title}?`;
+
+        addActionRow(body, [
+            { label: 'Give me something to try', value: tryPrompt },
+            { label: 'I have a question', value: null }
+        ]);
+    }
+
+    function renderTranscript(transcript) {
+        feed.innerHTML = '';
+        transcript.forEach(entry => {
+            if (entry.role === 'user') addUser(entry.content);
+            else addKindling(entry.content, false);
+        });
+        scrollFeed();
+    }
+
+    /*
+     * "Today" / "Yesterday" / "Sep 21" for the row's own label, plus
+     * which section it belongs under — both derived from the same
+     * day-difference so they can never disagree with each other.
+     */
+    function describeSession(createdAt) {
+        const created = new Date(createdAt);
+        const dayStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+        const diffDays = Math.round((dayStart(new Date()) - dayStart(created)) / 86400000);
+
+        const time = diffDays <= 0 ? 'Today'
+            : diffDays === 1 ? 'Yesterday'
+            : created.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+        const group = diffDays <= 0 ? 'Today' : diffDays <= 7 ? 'Earlier this week' : 'Older';
+
+        return { time, group };
+    }
+
+    const PIN_ICON = '<svg class="thread-pin-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v3.5L9 6l-1 1-2-1v3l-1 1-1-1V6L2 7 1 6l3-1.5V1z" fill="currentColor"/></svg>';
+
+    function renderThreadRow(session) {
+        const { time } = describeSession(session.created_at);
+        const isCurrent = session.session_id === K.getSessionId();
+
+        const wrap = document.createElement('div');
+        wrap.className = 'thread-row-wrap' + (isCurrent ? ' is-current' : '');
+        wrap.dataset.sessionId = session.session_id;
+
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'thread-row';
+        row.title = session.label;
+        if (isCurrent) row.setAttribute('aria-current', 'true');
+        row.innerHTML = `
+      <span class="thread-row-title">${session.pinned ? PIN_ICON : ''}<span>${esc(session.label)}</span></span>
+      <div class="thread-row-time">${esc(time)}</div>`;
+        row.addEventListener('click', () => openThread(session.session_id));
+
+        const menuBtn = document.createElement('button');
+        menuBtn.type = 'button';
+        menuBtn.className = 'thread-row-menu-btn';
+        menuBtn.setAttribute('aria-label', `Options for ${session.label}`);
+        menuBtn.setAttribute('aria-haspopup', 'menu');
+        menuBtn.setAttribute('aria-expanded', 'false');
+        menuBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="2.6" r="1.3" fill="currentColor"/><circle cx="7" cy="7" r="1.3" fill="currentColor"/><circle cx="7" cy="11.4" r="1.3" fill="currentColor"/></svg>';
+
+        const menu = document.createElement('div');
+        menu.className = 'thread-row-menu';
+        menu.setAttribute('role', 'menu');
+        menu.hidden = true;
+        menu.innerHTML = `
+      <button type="button" role="menuitem" data-action="pin">${PIN_ICON}${session.pinned ? 'Unpin' : 'Pin'}</button>
+      <button type="button" role="menuitem" class="danger" data-action="delete">
+        <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 3h8M4.5 3V2a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1M3 3l.5 7a1 1 0 0 0 1 .9h5a1 1 0 0 0 1-.9L11 3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg>
+        Delete</button>`;
+
+        menuBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            toggleThreadMenu(menuBtn, menu);
+        });
+        menu.addEventListener('click', e => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            e.stopPropagation();
+            closeThreadMenu(menuBtn, menu);
+            if (btn.dataset.action === 'pin') togglePin(session);
+            else if (btn.dataset.action === 'delete') openDeleteDialog(session);
+        });
+        menu.addEventListener('keydown', e => onThreadMenuKeydown(e, menuBtn, menu));
+
+        wrap.append(row, menuBtn, menu);
+        return wrap;
+    }
+
+    function renderThreadsList(sessions) {
+        threadsList.innerHTML = '';
+
+        if (!sessions.length) {
+            const empty = document.createElement('p');
+            empty.className = 'threads-empty';
+            empty.textContent = 'Your past threads will appear here.';
+            threadsList.appendChild(empty);
+            return;
+        }
+
+        const pinned = sessions.filter(s => s.pinned).sort((a, b) => new Date(b.pinned_at) - new Date(a.pinned_at));
+        const unpinned = sessions.filter(s => !s.pinned);
+
+        if (pinned.length) {
+            const label = document.createElement('p');
+            label.className = 'thread-group-label';
+            label.textContent = 'Pinned';
+            threadsList.appendChild(label);
+            pinned.forEach(session => threadsList.appendChild(renderThreadRow(session)));
+        }
+
+        const groups = new Map();
+        unpinned.forEach(session => {
+            const { group } = describeSession(session.created_at);
+            if (!groups.has(group)) groups.set(group, []);
+            groups.get(group).push(session);
+        });
+
+        ['Today', 'Earlier this week', 'Older'].forEach(groupName => {
+            const items = groups.get(groupName);
+            if (!items || !items.length) return;
+
+            const label = document.createElement('p');
+            label.className = 'thread-group-label';
+            label.textContent = groupName;
+            threadsList.appendChild(label);
+
+            items.forEach(session => threadsList.appendChild(renderThreadRow(session)));
+        });
+    }
+
+    /* ---- row "⋯" menu: open/close + keyboard nav ---- */
+    let openThreadMenu = null;
+
+    function closeThreadMenu(menuBtn, menu) {
+        menu.hidden = true;
+        menuBtn.setAttribute('aria-expanded', 'false');
+        if (openThreadMenu && openThreadMenu.menu === menu) openThreadMenu = null;
+    }
+
+    function toggleThreadMenu(menuBtn, menu) {
+        if (openThreadMenu && openThreadMenu.menu !== menu) closeThreadMenu(openThreadMenu.menuBtn, openThreadMenu.menu);
+
+        if (!menu.hidden) {
+            closeThreadMenu(menuBtn, menu);
+            menuBtn.focus();
+            return;
+        }
+
+        menu.hidden = false;
+        menuBtn.setAttribute('aria-expanded', 'true');
+        openThreadMenu = { menuBtn, menu };
+        menu.querySelector('button')?.focus();
+    }
+
+    function onThreadMenuKeydown(e, menuBtn, menu) {
+        const items = [...menu.querySelectorAll('button')];
+        const idx = items.indexOf(document.activeElement);
+
+        if (e.key === 'ArrowDown') { e.preventDefault(); items[(idx + 1) % items.length]?.focus(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); items[(idx - 1 + items.length) % items.length]?.focus(); }
+        else if (e.key === 'Escape') { e.preventDefault(); closeThreadMenu(menuBtn, menu); menuBtn.focus(); }
+        else if (e.key === 'Tab') { closeThreadMenu(menuBtn, menu); }
+    }
+
+    document.addEventListener('click', e => {
+        if (openThreadMenu && !e.target.closest('.thread-row-wrap')) {
+            closeThreadMenu(openThreadMenu.menuBtn, openThreadMenu.menu);
+        }
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && openThreadMenu) {
+            const { menuBtn, menu } = openThreadMenu;
+            closeThreadMenu(menuBtn, menu);
+            menuBtn.focus();
+        }
+    });
+
+    /* ---- pin ---- */
+    async function togglePin(session) {
+        const token = K.getAuthToken();
+        if (!token) return;
+
+        try {
+            const response = await fetch(`${K.API_BASE_URL}/api/chat/session/${session.session_id}/pin`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, pin: !session.pinned })
+            });
+
+            if (response.status === 400) {
+                const body = await response.json().catch(() => null);
+                K.toast(body?.detail || `You can pin up to ${MAX_PINS} threads.`);
+                return;
+            }
+
+            if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+            await loadThreads();
+        }
+
+        catch (error) {
+            console.error('Failed to update pin:', error);
+            K.toast("We couldn't update that. Please try again.");
+        }
+    }
+
+    /* ---- delete, with a client-side undo window (no backend delay —
+       the real DELETE call only ever fires once, after the toast
+       expires with no Undo click) ---- */
+    let pendingDeleteSession = null;
+    let pendingDeleteTimer = null;
+    let pendingDeleteUndone = false;
+
+    function openDeleteDialog(session) {
+        pendingDeleteSession = session;
+        deleteThreadDialog.showModal();
+    }
+
+    deleteThreadConfirmBtn.addEventListener('click', () => {
+        deleteThreadDialog.close();
+        const session = pendingDeleteSession;
+        pendingDeleteSession = null;
+        if (session) beginDeleteWithUndo(session);
+    });
+
+    function onUndoDelete() {
+        pendingDeleteUndone = true;
+        clearTimeout(pendingDeleteTimer);
+        undoToast.classList.remove('is-shown');
+        undoToastBtn.removeEventListener('click', onUndoDelete);
+        loadThreads();
+    }
+
+    function beginDeleteWithUndo(session) {
+        threadsList.querySelector(`.thread-row-wrap[data-session-id="${session.session_id}"]`)?.remove();
+
+        pendingDeleteUndone = false;
+        undoToastText.textContent = 'Thread deleted';
+        undoToast.classList.add('is-shown');
+        undoToastBtn.addEventListener('click', onUndoDelete);
+
+        pendingDeleteTimer = setTimeout(async () => {
+            undoToast.classList.remove('is-shown');
+            undoToastBtn.removeEventListener('click', onUndoDelete);
+            if (pendingDeleteUndone) return;
+            await reallyDeleteSession(session);
+        }, 5000);
+    }
+
+    async function reallyDeleteSession(session) {
+        const token = K.getAuthToken();
+        if (!token) return;
+
+        try {
+            const response = await fetch(
+                `${K.API_BASE_URL}/api/chat/session/${session.session_id}?token=${encodeURIComponent(token)}`,
+                { method: 'DELETE' }
+            );
+            if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+            if (session.session_id === K.getSessionId()) {
+                K.clearSession();
+                activeContext = null;
+
+                const remaining = await fetchThreadsRaw();
+                if (remaining.length) {
+                    await openThread(remaining[0].session_id);
+                }
+                else {
+                    feed.innerHTML = '';
+                    renderEmptyFeedState();
+                }
+            }
+
+            await loadThreads();
+        }
+
+        catch (error) {
+            console.error('Failed to delete thread:', error);
+            K.toast("We couldn't delete that thread. Please try again.");
+            loadThreads();
+        }
+    }
+
+    /*
+     * No rename here: it has no real backend endpoint, and faking
+     * one would violate the same rule this whole feature respects —
+     * hide an action rather than pretend it works.
+     */
+    async function fetchThreadsRaw() {
+        const token = K.getAuthToken();
+        if (!token) return [];
+
+        try {
+            const response = await fetch(`${K.API_BASE_URL}/api/auth/sessions?token=${encodeURIComponent(token)}`);
+            if (!response.ok) return [];
+            const data = await response.json();
+            return Array.isArray(data.sessions) ? data.sessions : [];
+        }
+        catch (error) {
+            console.error('Failed to load threads:', error);
+            return [];
+        }
+    }
+
+    async function loadThreads() {
+        if (!K.getAuthToken()) { threadsList.innerHTML = ''; return; }
+        renderThreadsList(await fetchThreadsRaw());
+    }
+
+    function highlightCurrentThread() {
+        const currentId = K.getSessionId();
+        $$('.thread-row-wrap', threadsList).forEach(wrap => {
+            const match = wrap.dataset.sessionId === currentId;
+            wrap.classList.toggle('is-current', match);
+            const row = $('.thread-row', wrap);
+            if (match) row.setAttribute('aria-current', 'true');
+            else row.removeAttribute('aria-current');
+        });
+    }
+
+    async function openThread(sessionId) {
+        if (sessionId !== K.getSessionId()) {
+            setLoading(true);
+            K.setSessionId(sessionId);
+            activeContext = null;
+
+            const restored = await restoreSession(sessionId);
+
+            if (!restored) {
+                feed.innerHTML = '';
+                addKindling("We couldn't load that conversation. Please try again.", false);
+            }
+
+            setLoading(false);
+            highlightCurrentThread();
+        }
+
+        closeDrawer();
+    }
+
+    function applyCollapsedState() {
+        let collapsed = false;
+        try { collapsed = localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === 'true'; }
+        catch (error) {}
+
+        threadsSidebar.classList.toggle('is-collapsed', collapsed);
+        threadsCollapseBtn.hidden = collapsed;
+        threadsExpandBtn.hidden = !collapsed;
+        threadsCollapseBtn.setAttribute('aria-expanded', String(!collapsed));
+    }
+
+    function openDrawer() {
+        threadsSidebar.classList.add('is-open');
+        threadsBackdrop.hidden = false;
+        requestAnimationFrame(() => threadsBackdrop.classList.add('is-visible'));
+        document.addEventListener('keydown', onDrawerKeydown);
+    }
+
+    function closeDrawer() {
+        if (!threadsSidebar.classList.contains('is-open')) return;
+        threadsSidebar.classList.remove('is-open');
+        threadsBackdrop.classList.remove('is-visible');
+        document.removeEventListener('keydown', onDrawerKeydown);
+        setTimeout(() => { threadsBackdrop.hidden = true; }, 250);
+    }
+
+    function onDrawerKeydown(e) {
+        if (e.key === 'Escape') closeDrawer();
+    }
+
+    threadsCollapseBtn.addEventListener('click', () => {
+        try { localStorage.setItem(SIDEBAR_COLLAPSE_KEY, 'true'); } catch (error) {}
+        applyCollapsedState();
+    });
+
+    threadsExpandBtn.addEventListener('click', () => {
+        try { localStorage.setItem(SIDEBAR_COLLAPSE_KEY, 'false'); } catch (error) {}
+        applyCollapsedState();
+    });
+
+    threadsMobileToggle.addEventListener('click', openDrawer);
+    threadsBackdrop.addEventListener('click', closeDrawer);
+
+    applyCollapsedState();
+
+    async function startConversation(context) {
+
+        setLoading(true);
+        feed.innerHTML = '';
+        addKindling(null);
+
+        try {
+
+            const response = await fetch(`${K.API_BASE_URL}/api/chat/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: K.getAuthToken() })
+            });
+
+            if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+            const data = await response.json();
+
+            if (!data.session_id) throw new Error('No session id received.');
+
+            K.setSessionId(data.session_id);
+
+            feed.innerHTML = '';
+
+            showOccupationContext(context);
+
+            addKindling(data.opening_question || "What have you been curious about lately?", true);
+
+            questionIndex = 1;
+            updateProgress();
+
+        }
+
+        catch (error) {
+            console.error('Failed to start chat:', error);
+            feed.innerHTML = '';
+            addKindling("We couldn't start the conversation. Please try again.", false);
+        }
+
+        finally {
+            setLoading(false);
+        }
+
+    }
+
+    async function restoreSession(sessionId) {
+
+        try {
+
+            const response = await fetch(`${K.API_BASE_URL}/api/chat/session/${sessionId}`);
+
+            if (!response.ok) return false;
+
+            const data = await response.json();
+
+            if (Array.isArray(data.transcript) && data.transcript.length > 0) {
+                renderTranscript(data.transcript);
+            }
+
+            if (typeof data.user_messages_count === 'number') {
+                questionIndex = data.user_messages_count + 1;
+            }
+
+            updateProgress();
+
+            return true;
+
+        }
+
+        catch (error) {
+            console.error('Failed to restore session:', error);
+            return false;
+        }
+
+    }
+
+    async function sendMessage(text) {
+
+        text = text.trim();
+        if (!text || isLoading) return;
+
+        if (!K.getSessionId()) {
+            // Post-delete empty state: nothing exists yet. Start a
+            // real thread first (Kindling's real opening question),
+            // then send this as the actual first turn.
+            await startConversation();
+            if (!K.getSessionId()) return;
+        }
+
+        const sessionId = K.getSessionId();
+
+        addUser(text);
+        input.value = '';
+        autoGrowInput();
+        setLoading(true);
+
+        const pending = addKindling(null);
+
+        try {
+
+            const response = await fetch(`${K.API_BASE_URL}/api/chat/message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    message: text,
+                    context: activeContext ? {
+                        title: activeContext.title,
+                        description: activeContext.description,
+                        tasks: activeContext.tasks
+                    } : undefined
+                })
+            });
+
+            if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+            const data = await response.json();
+
+            pending.innerHTML = data.reply ? `<p>${esc(data.reply)}</p>` : '';
+
+            if (typeof data.question_index === 'number') questionIndex = data.question_index;
+            if (typeof data.total_questions === 'number') totalQuestions = data.total_questions;
+
+            updateProgress();
+            scrollFeed();
+
+            /*
+             * Refreshes the row's label once it stops being "New
+             * conversation" (set the moment this session's first
+             * real message lands) — cheap enough at this scale to
+             * just do on every turn rather than track first-turn.
+             */
+            loadThreads();
+
+        }
+
+        catch (error) {
+            console.error('Failed to send message:', error);
+            pending.innerHTML = `<p>We couldn't send that. Please try again.</p>`;
+        }
+
+        finally {
+            setLoading(false);
+            input.focus();
+        }
+
+    }
+
+    const MAX_COMPOSER_HEIGHT = 160;
+
+    function autoGrowInput() {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, MAX_COMPOSER_HEIGHT) + 'px';
+    }
+
+    input.addEventListener('input', () => {
+        sendBtn.disabled = isLoading || !input.value.trim();
+        autoGrowInput();
+    });
+
+    input.addEventListener('keydown', e => {
+        // Shift+Enter inserts a newline (textarea default); plain
+        // Enter sends, but never mid-IME-composition (e.isComposing).
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+            e.preventDefault();
+            sendMessage(input.value);
+        }
+    });
+
+    form.addEventListener('submit', e => { e.preventDefault(); sendMessage(input.value); });
+
+    $('#newThread').addEventListener('click', async () => {
+        /*
+         * started stays true: this IS the "already initialized"
+         * state for this visit, just re-rendered fresh. Setting
+         * it false here did nothing for this call (startConversation
+         * is invoked directly, not through the guarded router) but
+         * corrupted state for later — a later hash round-trip back
+         * to #explore would see started===false and re-run
+         * onRoute.explore's restore-or-start logic on top of the
+         * session this button just created.
+         */
+        K.clearSession();
+        activeContext = null;
+        await startConversation();
+        await loadThreads();
+        closeDrawer();
+    });
+
+    K.onRoute.explore = async () => {
+
+        if (started) return;
+        started = true;
+
+        loadThreads();
+
+        /*
+         * Read once regardless of which path below runs, so a
+         * career-graph selection grounds the conversation whether
+         * this lands on a brand-new session or an existing one.
+         * Kept in activeContext (not just used for the "Continuing
+         * from" card) so sendMessage() actually sends it to the
+         * backend on every turn of this conversation, not just
+         * cosmetically in the UI.
+         */
+        const context = takeOccupationContext();
+        activeContext = context;
+
+        const existingSessionId = K.getSessionId();
+
+        if (existingSessionId) {
+            const restored = await restoreSession(existingSessionId);
+            if (restored) {
+                showOccupationContext(context);
+                return;
+            }
+        }
+
+        startConversation(context);
+
+    };
+
+})();

@@ -14,7 +14,7 @@ class TestOccupationMatching(unittest.TestCase):
     def test_profile_1(self):
         student_vector = [5.0, 3.0, 4.0, 2.0, 5.0, 4.0]
 
-        matches = match_occupations(student_vector, top_k=5)
+        matches = match_occupations(student_vector, threshold=0.0, max_results=5)
 
         self.assertEqual(len(matches), 5)
         self.assertTrue(all("title" in match for match in matches))
@@ -24,7 +24,7 @@ class TestOccupationMatching(unittest.TestCase):
     def test_profile_2(self):
         student_vector = [2.0, 5.0, 3.0, 5.0, 2.0, 4.0]
 
-        matches = match_occupations(student_vector, top_k=5)
+        matches = match_occupations(student_vector, threshold=0.0, max_results=5)
 
         self.assertEqual(len(matches), 5)
         self.assertTrue(all("title" in match for match in matches))
@@ -33,7 +33,7 @@ class TestOccupationMatching(unittest.TestCase):
     def test_profile_3(self):
         student_vector = [4.0, 4.0, 5.0, 3.0, 2.0, 5.0]
 
-        matches = match_occupations(student_vector, top_k=5)
+        matches = match_occupations(student_vector, threshold=0.0, max_results=5)
 
         self.assertEqual(len(matches), 5)
         self.assertTrue(all("title" in match for match in matches))
@@ -42,7 +42,7 @@ class TestOccupationMatching(unittest.TestCase):
     def test_results_are_ranked(self):
         student_vector = [5.0, 3.0, 4.0, 2.0, 5.0, 4.0]
 
-        matches = match_occupations(student_vector, top_k=5)
+        matches = match_occupations(student_vector, threshold=0.0, max_results=5)
 
         similarities = [match["similarity"] for match in matches]
 

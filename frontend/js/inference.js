@@ -1,0 +1,199 @@
+/* =========================================================
+   INFERENCE — real radar
+   Real endpoint: GET /api/chat/inference/{session_id}. Radar
+   vertex reach is the real 0-1 score (shapes the drawing
+   only — never printed as a number). The mockup's "evidence"
+   sidebar quoted specific things the user said per theme;
+   the backend has no endpoint that attributes a quote to a
+   dimension, so that sidebar is replaced with the honest,
+   static per-pattern description instead of fabricated quotes.
+   ========================================================= */
+
+(() => {
+
+    const K = window.Kindling;
+    const { $, $$, el, esc, colorOf, addGlow, drawNode, onActivate } = K;
+
+    const inf = $('#inferenceMap');
+    const C = { x: 320, y: 262 }, R = 170;
+
+    let scores = {};
+    const N = K.patterns.length;
+
+    const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / N; return { x: C.x + Math.cos(a) * r, y: C.y + Math.sin(a) * r, c: Math.cos(a), s: Math.sin(a) }; };
+
+    const evList = $('#evidenceList'), infFoot = $('#infFoot');
+
+    function getStrengthLabel(value) {
+        if (typeof value !== 'number') return 'No data yet';
+        if (value >= 0.75) return 'Showing up often';
+        if (value >= 0.5) return 'Showing up';
+        if (value >= 0.25) return 'Starting to appear';
+        return 'Not yet showing';
+    }
+
+    let infEls = {}, axisEls = {}, youNode = null, currentTheme = null;
+
+    function renderRadar() {
+
+        /*
+         * inf.innerHTML is cleared on every real refetch (see
+         * onRoute.inference below), so the glow filter has to
+         * be recreated here each time too — building it once
+         * at module scope would leave drawNode()'s halo
+         * circles pointing at a filter id that no longer
+         * exists after the first re-render.
+         */
+        inf.innerHTML = '';
+
+        const defs = el('defs', {}, inf);
+        const infGlow = addGlow(inf);
+
+        const rg = el('radialGradient', { id: 'radarFill', cx: '50%', cy: '50%', r: '60%' }, defs);
+        el('stop', { offset: '0', 'stop-color': '#f5c46a', 'stop-opacity': '0.38' }, rg);
+        el('stop', { offset: '1', 'stop-color': '#e8a94a', 'stop-opacity': '0.10' }, rg);
+
+        const grid = el('g', {}, inf);
+        [0.25, 0.5, 0.75, 1].forEach(f => el('polygon', { class: 'radar-ring', points: K.patterns.map((_, i) => { const p = pt(i, R * f); return `${p.x},${p.y}`; }).join(' ') }, grid));
+
+        axisEls = {};
+        K.patterns.forEach((t, i) => { const p = pt(i, R); axisEls[t.id] = el('line', { class: 'radar-axis', x1: C.x, y1: C.y, x2: p.x, y2: p.y }, grid); });
+
+        const shapePts = K.patterns.map((t, i) => { const reach = scores[t.key] || 0; const p = pt(i, R * reach); return `${p.x},${p.y}`; }).join(' ');
+        el('polygon', { class: 'radar-glow', points: shapePts }, inf);
+        el('polygon', { class: 'radar-shape', points: shapePts }, inf);
+
+        const infNodes = el('g', { class: 'radar-vertices' }, inf);
+        infEls = {};
+
+        K.patterns.forEach((t, i) => {
+            const reach = scores[t.key] || 0;
+            const v = pt(i, R * reach), tip = pt(i, R + 24);
+            const anchor = tip.c > 0.3 ? 'start' : tip.c < -0.3 ? 'end' : 'middle';
+            const g = drawNode(infNodes, { ...v }, infGlow, {
+                label: t.label, core: 4.5, halo: 16, anchor,
+                lx: tip.x - v.x, ly: tip.y - v.y + (tip.s < -0.5 ? -2 : tip.s > 0.5 ? 12 : 5)
+            });
+            g.querySelector('circle:nth-of-type(2)').setAttribute('fill', colorOf[t.tone]);
+            g.querySelectorAll('circle')[3].setAttribute('fill', colorOf[t.tone]);
+            infEls[t.id] = g;
+            onActivate(g, () => selectTheme(t.id, true));
+        });
+
+        youNode = drawNode(infNodes, { ...C, tone: 'warm' }, infGlow, { label: 'You', core: 3.5, halo: 12, lx: 0, ly: 20, anchor: 'middle' });
+        youNode.setAttribute('aria-label', 'You, show everything');
+        onActivate(youNode, () => selectTheme(null));
+
+        requestAnimationFrame(() => inf.classList.add('is-shown'));
+
+    }
+
+    function renderEvidence() {
+
+        evList.innerHTML = K.patterns.map(t => {
+            const c = colorOf[t.tone];
+            return `<li><button class="evidence" data-theme="${t.id}">
+        ${esc(t.description)}
+        <span class="evidence-meta"><span class="theme-tag"><i style="background:${c};box-shadow:0 0 6px ${c}"></i>${esc(t.label)}</span><span>${esc(getStrengthLabel(scores[t.key]))}</span></span>
+      </button></li>`;
+        }).join('');
+
+    }
+
+    function renderFoot(id) {
+        if (!id) {
+            infFoot.innerHTML = '<span>Select a star to see the pattern it represents.</span>';
+            return;
+        }
+        const t = K.patternById[id], c = colorOf[t.tone];
+        const v = K.feelings[id];
+        infFoot.innerHTML = `<strong><i style="background:${c};box-shadow:0 0 8px ${c}"></i>${esc(t.label)}</strong>
+      <span class="feel"><span>Does this feel like you?</span>
+        <button class="btn-line" data-feel="yes" aria-pressed="${v === 'yes'}">Feels right</button>
+        <button class="btn-line" data-feel="no" aria-pressed="${v === 'no'}">Not quite</button></span>`;
+    }
+
+    function selectTheme(id, fromMap) {
+        currentTheme = id || null;
+        Object.entries(infEls).forEach(([k, g]) => g.classList.toggle('is-selected', k === id));
+        Object.entries(axisEls).forEach(([k, a]) => a.classList.toggle('is-lit', k === id));
+        youNode?.classList.toggle('is-selected', !id);
+        evList.classList.toggle('is-filtered', !!id);
+        let first = null;
+        $$('.evidence', evList).forEach(b => { const on = b.dataset.theme === id; b.classList.toggle('is-lit', on); if (on && !first) first = b; });
+        if (fromMap && first) first.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        renderFoot(currentTheme);
+    }
+
+    evList.addEventListener('click', e => { const b = e.target.closest('.evidence'); if (b) selectTheme(b.dataset.theme === currentTheme ? null : b.dataset.theme); });
+    infFoot.addEventListener('click', e => {
+        const f = e.target.closest('[data-feel]');
+        if (f && currentTheme) K.setFeeling(currentTheme, f.dataset.feel);
+    });
+
+    K.onFeelingChange.push((traitKey) => {
+        if (currentTheme === traitKey) renderFoot(traitKey);
+    });
+
+    async function loadInference() {
+
+        const sessionId = K.getSessionId();
+
+        if (!sessionId) {
+            evList.innerHTML = '<li class="note-card glass">Start a conversation on Explore to see what Kindling notices.</li>';
+            scores = {};
+            renderRadar();
+            renderFoot(null);
+            return;
+        }
+
+        try {
+
+            const response = await fetch(`${K.API_BASE_URL}/api/chat/inference/${sessionId}`);
+
+            if (response.status === 404) {
+                const body = await response.json().catch(() => null);
+                evList.innerHTML = `<li class="note-card glass">${esc(body?.detail || 'Patterns are not available yet. Please complete the chat first.')}</li>`;
+                scores = {};
+                renderRadar();
+                renderFoot(null);
+                return;
+            }
+
+            if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+            const data = await response.json();
+
+            if (data.inference_failed) {
+                evList.innerHTML = '<li class="note-card glass">Scoring did not complete cleanly for this session. Keep exploring and check back.</li>';
+                scores = {};
+                renderRadar();
+                renderFoot(null);
+                return;
+            }
+
+            scores = data.inference || {};
+            renderRadar();
+            renderEvidence();
+            renderFoot(null);
+
+        }
+
+        catch (error) {
+            console.error('Failed to load inference:', error);
+            evList.innerHTML = '<li class="note-card glass">We could not reach the server. Please try again.</li>';
+        }
+
+    }
+
+    K.onRoute.inference = () => {
+        /*
+         * Refetch every visit, not just once: patterns can
+         * genuinely change as the user answers more questions
+         * on Explore, so a one-time cache would show stale
+         * data after they come back from adding more.
+         */
+        loadInference();
+    };
+
+})();
