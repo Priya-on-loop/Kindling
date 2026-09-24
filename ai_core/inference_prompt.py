@@ -10,6 +10,13 @@ from call_llm import call_llm
 # v4 (14 Sep) - fixed injection defense: attack-text structure/tone was being scored as a
 #               false signal (organizes_systems 0.8, leads_persuades 0.6 on a pure attack
 #               attempt); now explicitly excluded, confirmed flat 0.05 across all 6 on retest
+# v5 (23 Sep) - real bug found in testing: works_with_people swung 0.10-0.48 across identical
+#               reruns of the same transcript (default sampling temperature ~1.0), enough to
+#               flip the "Starting to appear" UI label on pure run-to-run noise, not signal.
+#               Now called with a low SCORE_TEMPERATURE for reproducible scores; chat replies
+#               elsewhere are unaffected (they still use the provider default).
+
+SCORE_TEMPERATURE = 0.1
 
 
 SYSTEM_PROMPT = """You read a conversation transcript between a career-exploration assistant and a student, and score the student's likely interests across 6 dimensions based on HOW they communicate and what they show curiosity about - not just what they explicitly say they like.
@@ -82,7 +89,7 @@ def score_transcript(transcript_text: str) -> dict:
     messages = FEW_SHOT_EXAMPLES + [{"role": "user", "content": f"Transcript:\n{transcript_text}"}]
 
     try:
-        raw = call_llm(messages=messages, system_prompt=SYSTEM_PROMPT)
+        raw = call_llm(messages=messages, system_prompt=SYSTEM_PROMPT, temperature=SCORE_TEMPERATURE)
         data = json.loads(raw)
         if is_valid_scores(data):
             return data
@@ -91,7 +98,7 @@ def score_transcript(transcript_text: str) -> dict:
         print("First attempt failed. Retrying with stricter instruction...")
         try:
             retry_messages = messages + [{"role": "user", "content": "Your last response was not valid - either it was missing a key, a value wasn't a number, or a value was outside 0.0-1.0. Respond again with ONLY the JSON object, all 6 keys, each a float between 0.0 and 1.0."}]
-            raw_retry = call_llm(retry_messages, system_prompt=SYSTEM_PROMPT)
+            raw_retry = call_llm(retry_messages, system_prompt=SYSTEM_PROMPT, temperature=SCORE_TEMPERATURE)
             data = json.loads(raw_retry)
             if is_valid_scores(data):
                 return data

@@ -2,16 +2,21 @@ import os
 from dotenv import load_dotenv
 from groq import Groq
 from google import genai
+from google.genai import types
 
 load_dotenv()
 
 groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-def call_llm(messages: list[dict], system_prompt: str = "") -> str:
+def call_llm(messages: list[dict], system_prompt: str = "", temperature: float | None = None) -> str:
     """
     messages: list like [{"role": "user", "content": "hello"}]
     system_prompt: optional instruction for how the model should behave
+    temperature: optional sampling temperature. Left as the provider
+        default (None) for normal conversational replies, which want
+        natural variety; callers that need stable, reproducible output
+        (e.g. RIASEC scoring) pass a low value explicitly.
     Tries Groq first. If anything goes wrong, falls back to Gemini.
     Always returns a plain string.
     """
@@ -21,10 +26,10 @@ def call_llm(messages: list[dict], system_prompt: str = "") -> str:
     full_messages.extend(messages)
 
     try:
-        response = groq_client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=full_messages,
-        )
+        kwargs = {"model": "openai/gpt-oss-120b", "messages": full_messages}
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        response = groq_client.chat.completions.create(**kwargs)
         return response.choices[0].message.content
 
     except Exception as e:
@@ -35,9 +40,11 @@ def call_llm(messages: list[dict], system_prompt: str = "") -> str:
         for m in messages:
             text_block += f"{m['role']}: {m['content']}\n"
         try:
+            config = types.GenerateContentConfig(temperature=temperature) if temperature is not None else None
             response = gemini_client.models.generate_content(
                 model="gemini-3.6-flash",
                 contents=text_block,
+                config=config,
             )
             return response.text
         except Exception as e2:
