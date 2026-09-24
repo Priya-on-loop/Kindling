@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Kindling</title>
+<title>Kindling — AI Career Discovery</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -24,14 +24,59 @@
     })();
 </script>
 <style>
-    /* Fix for hero card highlight bug */
-    .hero-copy .hero-title,
-    .hero-copy .eyebrow,
-    .hero-copy .hero-body {
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
+    /* 1. Prevent text selection/highlight bug on hero section */
+    #home,
+    .hero,
+    .hero-copy,
+    .hero-title,
+    .hero-body,
+    .eyebrow {
+        -webkit-user-select: none !important;
+        -moz-user-select: none !important;
+        -ms-user-select: none !important;
+        user-select: none !important;
+    }
+
+    /* 2. Fix top padding so title never gets cut off under navbar */
+    .hero-copy {
+        padding-top: 40px !important;
+    }
+
+    /* 3. Minimal, non-intrusive footer */
+    .app-footer {
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        padding: 12px 24px;
+        background: transparent;
+        font-size: 0.72rem;
+        color: rgba(160, 174, 192, 0.7);
+        position: relative;
+        z-index: 5;
+    }
+    .footer-content {
+        max-width: 1100px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+    }
+    .footer-right a {
+        color: rgba(160, 174, 192, 0.7);
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+    .footer-right a:hover {
+        color: #f5c46a;
+    }
+
+    /* Hide footer on all app pages (only show on Home) */
+    body[data-page="explore"] .app-footer,
+    body[data-page="inference"] .app-footer,
+    body[data-page="graph"] .app-footer,
+    body[data-page="reflection"] .app-footer,
+    body[data-page="auth"] .app-footer,
+    body[data-page="settings"] .app-footer {
+        display: none !important;
     }
 </style>
 </head>
@@ -123,10 +168,10 @@
           </svg>
         </div>
         <div class="hero-copy">
-          <p class="eyebrow cool">A space for curiosity</p>
-          <h1 class="hero-title">You don't have<br>to know <em>yet.</em></h1>
-          <p class="hero-body"><strong>Kindling helps you</strong> follow what catches your attention, notice how your ideas connect, and find directions worth exploring, at your own pace.</p>
-          <a href="#explore" class="btn-gold">Start exploring <svg width="14" height="14"><use href="#arrow"/></svg></a>
+          <p class="eyebrow cool">AI-Powered Career Exploration</p>
+          <h1 class="hero-title">Find your path<br>through <em>conversation.</em></h1>
+          <p class="hero-body"><strong>Kindling is an AI career guide</strong> that discovers your interests through natural chat. Talk about what you enjoy doing, and we'll map your habits to 923 real careers.</p>
+          <a href="#explore" class="btn-gold">Start Exploring <svg width="14" height="14"><use href="#arrow"/></svg></a>
         </div>
         <ol class="journey" aria-label="How Kindling works">
           <li>Questions</li><li>Connections</li><li>Possibilities</li><li>You</li>
@@ -135,7 +180,7 @@
           <p>Curious now.<br>Clearer later.</p>
           <a class="scroll-cue" href="#explore">
             <span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><path d="M5 1v9M1.5 6.5 5 10l3.5-3.5" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></span>
-            Begin with a question
+            Begin discovery chat
           </a>
         </div>
       </div>
@@ -175,7 +220,7 @@
           <div class="feed" id="feed" aria-live="polite"></div>
           <form class="composer" id="composer" autocomplete="off">
             <label for="ask" class="sr-only">Your question</label>
-            <textarea id="ask" rows="1" placeholder="Tell me what's on your mind…"></textarea>
+            <textarea id="ask" rows="1" placeholder="Tell me what you've been curious about or tinkering with lately…"></textarea>
             <button class="send" type="submit" aria-label="Send" disabled>
               <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 11 11 3M5 3h6v6" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
             </button>
@@ -266,7 +311,7 @@
       </div>
     </section>
 
-    <!-- ============ AUTH (guest-only: no real backend auth exists) ============ -->
+    <!-- ============ AUTH ============ -->
     <section class="screen" id="auth" aria-label="Sign in or create an account">
       <div class="auth-layout">
         <div class="auth-copy">
@@ -389,7 +434,21 @@
         </div>
       </div>
     </section>
+
   </main>
+
+  <!-- ============ FOOTER (minimal, only shows on Home) ============ -->
+  <footer class="app-footer">
+    <div class="footer-content">
+      <span>Kindling · AI Career Discovery</span>
+      <span class="footer-right">
+        <a href="mailto:support@kindling-ai.org">Contact</a>
+        <span style="opacity:0.4; margin:0 8px;">·</span>
+        <span>© 2025</span>
+      </span>
+    </div>
+  </footer>
+
 </div>
 
 <dialog id="resetDialog" aria-labelledby="resetTitle">
