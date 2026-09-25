@@ -184,6 +184,20 @@ ENGAGEMENT
 - When a follow-up question would genuinely help the conversation continue, end with ONE short, natural question.
 """
 
+# Added to PHASE2_SYSTEM_PROMPT only for a student's first message right
+# after arriving from a real Career Graph node click (see MessageRequest.
+# introRequest) — keeps that one reply to a short plain explanation with
+# no question at the end, since the frontend shows two real buttons
+# ("Try a small task" / "Ask a doubt") right after instead.
+CAREER_GRAPH_INTRO_ADDITION = """
+
+The student just arrived here by clicking a real occupation or field on \
+Career Graph — this is their very first message about it. Give ONLY a \
+short, plain 1-2 sentence explanation of what this real job/field \
+actually involves, grounded in the real description above. Do not ask a \
+question, do not offer a task, and do not use a bulleted list here — just \
+two friendly sentences."""
+
 CLOSING_MESSAGE = (
     "Thanks for sharing all of that! I've got a good sense of what draws you in. "
     "Your initial career profile is complete! You can view your career matches now, "
@@ -229,6 +243,7 @@ class StartResponse(BaseModel):
 
 class MessageRequest(BaseModel):
     session_id: str
+    token: str
     message: str
     context: Optional[OccupationContext] = None
     # True only on the one message sent right after a student arrives
@@ -245,15 +260,18 @@ class MessageResponse(BaseModel):
 
 class EventLogRequest(BaseModel):
     session_id: str
+    token: str
     event_type: str
     event_data: Optional[Dict[str, Any]] = None
 
 class ProfileUpdateRequest(BaseModel):
     session_id: str
+    token: str
     inference: Dict[str, float]
 
 class TraitDecisionRequest(BaseModel):
     session_id: str
+    token: str
     trait: str
     action: str
     override_value: Optional[float] = None
@@ -261,6 +279,7 @@ class TraitDecisionRequest(BaseModel):
 class SignupRequest(BaseModel):
     email: str
     password: str
+    name: Optional[str] = None
 
 class LoginRequest(BaseModel):
     email: str
@@ -269,10 +288,22 @@ class LoginRequest(BaseModel):
 class AuthResponse(BaseModel):
     token: str
     email: str
+    name: str
 
 # ── Authentication ────────────────────────────────────────────
 
 MIN_PASSWORD_LENGTH = 8
+
+def display_name(raw_name: Optional[str], email: str) -> str:
+    """
+    The real stored name if there is one; otherwise the email's own
+    local part (everything before '@') as an honest fallback that's
+    still real, verifiable text - never a fabricated one.
+    """
+    if raw_name and raw_name.strip():
+        return raw_name.strip()
+    return email.split("@")[0]
+
 
 @app.post("/api/auth/signup", response_model=AuthResponse)
 def signup(req: SignupRequest) -> AuthResponse:
@@ -292,12 +323,14 @@ def signup(req: SignupRequest) -> AuthResponse:
         bcrypt.gensalt()
     ).decode("utf-8")
 
-    user_id = create_user(email, password_hash)
+    name = req.name.strip() if req.name and req.name.strip() else None
+    user_id = create_user(email, password_hash, name)
 
     if user_id is None:
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
 
-    return AuthResponse(token=user_id, email=email.strip().lower())
+    normalized_email = email.strip().lower()
+    return AuthResponse(token=user_id, email=normalized_email, name=display_name(name, normalized_email))
 
 
 @app.post("/api/auth/login", response_model=AuthResponse)
@@ -322,7 +355,7 @@ def login(req: LoginRequest) -> AuthResponse:
             detail="Incorrect password. Please try again."
         )
 
-    return AuthResponse(token=user["id"], email=user["email"])
+    return AuthResponse(token=user["id"], email=user["email"], name=display_name(user["name"], user["email"]))
 
 
 def resolve_user_id(token: Optional[str]) -> Optional[str]:
@@ -330,6 +363,33 @@ def resolve_user_id(token: Optional[str]) -> Optional[str]:
         return None
     user = get_user_by_id(token)
     return user["id"] if user else None
+
+
+def require_session_owner(session_id: str, token: Optional[str]) -> str:
+    """
+    401 if the token itself isn't a real, currently-valid session
+    (missing or doesn't resolve to a real user); 403 if it's real but
+    doesn't own this specific session. Returns the caller's user_id
+    on success. Session existence (404) is checked separately by
+    each caller, before this - a 404 shouldn't leak "this session ID
+    doesn't exist" info from behind an auth check meant to run first
+    is fine here since session_ids are opaque UUIDs, not enumerable.
+    """
+    user_id = resolve_user_id(token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or missing token.")
+    if get_session_user_id(session_id) != user_id:
+        raise HTTPException(status_code=403, detail="This thread doesn't belong to you.")
+    return user_id
+
+
+def require_valid_token(token: Optional[str]) -> str:
+    """For endpoints that need a real signed-in user but aren't tied
+    to one specific session (e.g. the internal dashboard)."""
+    user_id = resolve_user_id(token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or missing token.")
+    return user_id
 
 
 @app.get("/api/auth/sessions")
@@ -410,6 +470,7 @@ def delete_thread(session_id: str, token: str):
 def chat_message(req: MessageRequest) -> MessageResponse:
     if not session_exists(req.session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(req.session_id, req.token)
 
     add_message(req.session_id, "user", req.message)
     question_index = count_user_messages(req.session_id)
@@ -533,9 +594,10 @@ def chat_message(req: MessageRequest) -> MessageResponse:
 
 
 @app.get("/api/chat/session/{session_id}")
-def get_session_history(session_id: str):
+def get_session_history(session_id: str, token: str):
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(session_id, token)
 
     history = get_messages(session_id)
     user_count = count_user_messages(session_id)
@@ -549,9 +611,10 @@ def get_session_history(session_id: str):
 # ── Inference API ─────────────────────────────────────────────
 
 @app.get("/api/chat/inference/{session_id}")
-def get_inference_scores(session_id: str):
+def get_inference_scores(session_id: str, token: str):
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(session_id, token)
 
     scores = get_latest_inference_scores(session_id)
     if scores is None:
@@ -571,9 +634,10 @@ def get_inference_scores(session_id: str):
 # ── Career Graph API ──────────────────────────────────────────
 
 @app.get("/api/career-graph/{session_id}")
-def get_career_graph(session_id: str, max_results: int = MAX_RESULTS):
+def get_career_graph(session_id: str, token: str, max_results: int = MAX_RESULTS):
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(session_id, token)
 
     scores = get_latest_inference_scores(session_id)
     if scores is None:
@@ -618,13 +682,14 @@ def get_career_graph(session_id: str, max_results: int = MAX_RESULTS):
 CAREER_TREE_CACHE = {}
 
 @app.get("/api/career-tree/{session_id}")
-def get_career_tree(session_id: str):
+def get_career_tree(session_id: str, token: str):
     """
     Returns the 3-tier career tree graph for a session.
     Cached in memory per session + score state for instant 0.01s page loads.
     """
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(session_id, token)
 
     scores = get_latest_inference_scores(session_id)
     if scores is None:
@@ -662,9 +727,10 @@ def get_career_tree(session_id: str):
 # ── User Control & Profile ────────────────────────────────────
 
 @app.get("/api/user/profile/{session_id}")
-def get_user_profile(session_id: str):
+def get_user_profile(session_id: str, token: str):
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(session_id, token)
 
     scores = get_latest_inference_scores(session_id)
     if scores is None:
@@ -685,6 +751,7 @@ def get_user_profile(session_id: str):
 def update_user_profile(req: ProfileUpdateRequest):
     if not session_exists(req.session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(req.session_id, req.token)
 
     inf = req.inference
 
@@ -718,6 +785,7 @@ def update_user_profile(req: ProfileUpdateRequest):
 def trait_decision(req: TraitDecisionRequest):
     if not session_exists(req.session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(req.session_id, req.token)
 
     if req.trait not in REQUIRED_DIMENSIONS:
         raise HTTPException(
@@ -894,32 +962,37 @@ def delete_reflection_note_endpoint(note_id: int, token: str):
 def record_event(req: EventLogRequest):
     if not session_exists(req.session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(req.session_id, req.token)
     log_event(req.session_id, req.event_type, req.event_data)
     return {"status": "logged", "session_id": req.session_id, "event_type": req.event_type}
 
 
 @app.get("/api/dashboard/metrics")
-def get_metrics():
+def get_metrics(token: str):
+    require_valid_token(token)
     return {"status": "success", "metrics": get_dashboard_metrics()}
 
 
 @app.get("/api/dashboard/timeline/{session_id}")
-def get_timeline(session_id: str):
+def get_timeline(session_id: str, token: str):
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(session_id, token)
     return {"session_id": session_id, "timeline": get_session_timeline(session_id)}
 
 
 @app.get("/api/dashboard/field-summary")
-def get_field_metrics():
+def get_field_metrics(token: str):
+    require_valid_token(token)
     return {"status": "success", "field_summary": get_field_summary()}
 
 # ── SHAP Match Explainer ──────────────────────────────────────
 
 @app.get("/api/chat/explain/{session_id}/{occupation_id}")
-def get_match_explanation(session_id: str, occupation_id: str):
+def get_match_explanation(session_id: str, occupation_id: str, token: str):
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
+    require_session_owner(session_id, token)
 
     scores = get_latest_inference_scores(session_id)
     if not scores:

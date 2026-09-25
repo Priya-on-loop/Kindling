@@ -72,7 +72,7 @@
 
         try {
 
-            const response = await fetch(`${K.API_BASE_URL}/api/career-tree/${sessionId}`);
+            const response = await fetch(`${K.API_BASE_URL}/api/career-tree/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}`);
 
             if (response.status === 404) {
                 const body = await response.json().catch(() => null);
@@ -440,7 +440,8 @@
                     area,
                     startedAt: new Date(startedAt).toISOString(),
                     endedAt: new Date(endedAt).toISOString()
-                }
+                },
+                token: K.getAuthToken()
             })
         }).catch(() => {});
     }

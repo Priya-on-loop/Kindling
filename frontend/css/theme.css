@@ -139,6 +139,9 @@ body[data-page="settings"] .nebula { opacity: calc(var(--sky-opacity) * 0.35); }
 .nav-end { justify-self: end; display: flex; align-items: center; gap: 14px; }
 /* Links sit in the center once you're past the hero */
 body[data-page="home"] .nav > nav, body[data-page="auth"] .nav > nav { visibility: hidden; }
+/* No page links in the nav at all while signed out - every one of
+   them points at a private route anyway. */
+body:not(.signed-in) .nav > nav { visibility: hidden; }
 .bulb {
   width: 34px; height: 34px; border-radius: 50%;
   display: grid; place-items: center;
@@ -161,16 +164,34 @@ body[data-page="auth"] .nav-signin, body[data-page="auth"] .pill-outline { displ
   font-size: 13px; transition: border-color 0.25s, background 0.25s;
 }
 .pill-outline:hover { border-color: var(--warm); background: rgba(245, 196, 106, 0.08); }
+.account-menu { position: relative; }
 .avatar {
   width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%;
   background: #1c2244; border: 1px solid var(--border-strong);
   font-size: 13px; font-weight: 500; color: #e6e9ff;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-.avatar[aria-current="page"] { border-color: var(--warm); box-shadow: 0 0 10px rgba(245,196,106,0.35); }
+.avatar[aria-expanded="true"] { border-color: var(--warm); box-shadow: 0 0 10px rgba(245,196,106,0.35); }
 :root[data-theme="light"] .avatar { background: #d9ddf2; color: #262c52; }
-body[data-page="home"] .avatar { display: none; }
-body:not([data-page="home"]) .pill-outline { display: none; }
-body[data-page="home"].signed-in .pill-outline { display: inline-flex; }
+.account-dropdown {
+  position: absolute; z-index: 30; top: calc(100% + 10px); right: 0;
+  min-width: 220px; padding: 8px; border-radius: 14px;
+  background: var(--panel); border: 1px solid var(--border-strong);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 16px 32px rgba(0,0,0,0.35);
+}
+.account-dropdown[hidden] { display: none; }
+.account-dropdown-head { padding: 8px 10px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.account-dropdown-name { font-size: 13.5px; font-weight: 500; color: var(--fg); }
+.account-dropdown-email { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.account-dropdown a, .account-dropdown button {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 10px; border-radius: 9px;
+  font-size: 13px; color: var(--fg); text-align: left;
+}
+.account-dropdown svg { flex: none; color: var(--muted); }
+.account-dropdown a:hover, .account-dropdown button:hover,
+.account-dropdown a:focus-visible, .account-dropdown button:focus-visible { background: var(--surface); outline: none; }
 
 /* =========================================================
    SCREENS

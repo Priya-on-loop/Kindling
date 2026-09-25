@@ -83,7 +83,8 @@
                 body: JSON.stringify({
                     session_id: sessionId,
                     trait: traitKey,
-                    action: action === 'yes' ? 'accept' : 'reject'
+                    action: action === 'yes' ? 'accept' : 'reject',
+                    token: K.getAuthToken()
                 })
             });
 

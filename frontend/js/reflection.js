@@ -119,7 +119,7 @@
 
         try {
 
-            const response = await fetch(`${K.API_BASE_URL}/api/dashboard/timeline/${sessionId}`);
+            const response = await fetch(`${K.API_BASE_URL}/api/dashboard/timeline/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}`);
 
             if (!response.ok) throw new Error(`Server returned ${response.status}`);
 

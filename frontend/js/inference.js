@@ -155,7 +155,7 @@
         }
 
         try {
-            const response = await fetch(`${K.API_BASE_URL}/api/chat/inference/${sessionId}`);
+            const response = await fetch(`${K.API_BASE_URL}/api/chat/inference/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}`);
 
             if (response.status === 404) {
                 const body = await response.json().catch(() => null);

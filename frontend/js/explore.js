@@ -644,7 +644,7 @@
 
         try {
 
-            const response = await fetch(`${K.API_BASE_URL}/api/chat/session/${sessionId}`);
+            const response = await fetch(`${K.API_BASE_URL}/api/chat/session/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}`);
 
             if (!response.ok) return false;
 
@@ -697,6 +697,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     session_id: sessionId,
+                    token: K.getAuthToken(),
                     message: text,
                     context: activeContext ? {
                         title: activeContext.title,

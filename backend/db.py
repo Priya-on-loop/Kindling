@@ -110,6 +110,12 @@ def init_db():
     if "pinned_at" not in existing_columns:
         conn.execute("ALTER TABLE sessions ADD COLUMN pinned_at TEXT")
 
+    existing_user_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+    }
+    if "name" not in existing_user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN name TEXT")
+
     conn.commit()
     conn.close()
 
@@ -235,12 +241,14 @@ def delete_empty_sessions_for_user(user_id: str, exclude_session_id: str | None 
     return len(rows)
 
 
-def create_user(email: str, password_hash: str) -> str | None:
+def create_user(email: str, password_hash: str, name: str | None = None) -> str | None:
     """
     Creates a new user with an already-hashed password. Returns
     the new user's id, or None if the email is already taken.
     Email is normalized (trimmed + lowercased) so the same
     address can't be registered twice under different casing.
+    name is optional and stored exactly as given (already
+    trimmed/validated by the caller) - NULL if not provided.
     """
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -250,8 +258,8 @@ def create_user(email: str, password_hash: str) -> str | None:
 
     try:
         conn.execute(
-            "INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
-            (user_id, normalized_email, password_hash, now)
+            "INSERT INTO users (id, email, password_hash, created_at, name) VALUES (?, ?, ?, ?, ?)",
+            (user_id, normalized_email, password_hash, now, name)
         )
         conn.commit()
         return user_id

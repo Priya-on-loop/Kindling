@@ -116,6 +116,7 @@
 
     const AUTH_TOKEN_KEY = 'kindling_auth_token';
     const AUTH_EMAIL_KEY = 'kindling_auth_email';
+    const AUTH_NAME_KEY = 'kindling_auth_name';
 
     K.getAuthToken = function getAuthToken() {
         try { return localStorage.getItem(AUTH_TOKEN_KEY); }
@@ -127,10 +128,19 @@
         catch (error) { return null; }
     };
 
-    K.setAuth = function setAuth(token, email) {
+    // Real name if the account has one, otherwise the real email
+    // local-part fallback the backend already computed and returned
+    // at signup/login time - never blank, never invented here.
+    K.getAuthName = function getAuthName() {
+        try { return localStorage.getItem(AUTH_NAME_KEY) || K.getAuthEmail() || ''; }
+        catch (error) { return ''; }
+    };
+
+    K.setAuth = function setAuth(token, email, name) {
         try {
             localStorage.setItem(AUTH_TOKEN_KEY, token);
             localStorage.setItem(AUTH_EMAIL_KEY, email);
+            if (name) localStorage.setItem(AUTH_NAME_KEY, name);
         }
         catch (error) {}
     };
@@ -139,6 +149,7 @@
         try {
             localStorage.removeItem(AUTH_TOKEN_KEY);
             localStorage.removeItem(AUTH_EMAIL_KEY);
+            localStorage.removeItem(AUTH_NAME_KEY);
         }
         catch (error) {}
     };

@@ -11,35 +11,48 @@ Kindling.$$ = (s, r = document) => [...r.querySelectorAll(s)];
 
 Kindling.onRoute = {};
 
-Kindling.routes = ['home', 'explore', 'inference', 'graph', 'reflection', 'settings', 'auth', 'about', 'privacy', 'terms'];
-
 /*
- * Explore, Inference, Career Graph, and Reflection require a real
- * signed-in account. Landing (#home), #settings, and #auth itself
- * stay open to everyone. Kindling.isSignedIn() is defined in
- * session.js, which loads before go() is ever actually called
- * (only invoked from main.js after every script has loaded, or
- * from a later hashchange event) — the reference here just isn't
- * resolved until then.
+ * One source of truth for access: two lists, nothing else decides
+ * whether a route needs a real account. Public: reachable by anyone.
+ * Private: real account required (an account is required to explore
+ * Kindling at all, so this is everything except the marketing/legal
+ * pages and the auth screen itself).
  */
-Kindling.gatedRoutes = ['explore', 'inference', 'graph', 'reflection'];
+Kindling.publicRoutes = ['home', 'about', 'privacy', 'terms', 'auth'];
+Kindling.privateRoutes = ['explore', 'inference', 'graph', 'reflection', 'settings'];
+Kindling.routes = [...Kindling.publicRoutes, ...Kindling.privateRoutes];
+
+// Kept as an alias in case anything else still reads the old name.
+Kindling.gatedRoutes = Kindling.privateRoutes;
+
+// Where a signed-out visitor was actually trying to go, so auth.js
+// can send them there after a real login/signup instead of always
+// dropping them on #explore.
+const REDIRECT_KEY = 'kindling_redirect_after_login';
 
 Kindling.go = function go() {
-    const page = Kindling.routes.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
+    // A route can carry one sub-path segment (currently only
+    // #auth/login and #auth/signup) - the base segment is what
+    // gates/screens/nav-highlighting key off; the sub segment is
+    // handed to that route's own onRoute handler to interpret.
+    const [rawPage, sub] = location.hash.slice(1).split('/');
+    const page = Kindling.routes.includes(rawPage) ? rawPage : 'home';
 
-    if (Kindling.gatedRoutes.includes(page) && !Kindling.isSignedIn()) {
-        // Covers both in-app navigation to a gated link and a
+    if (Kindling.privateRoutes.includes(page) && !Kindling.isSignedIn()) {
+        // Covers both in-app navigation to a private link and a
         // direct/bookmarked load straight into #explore etc. —
-        // this reassigns location.hash, which fires 'hashchange'
-        // and re-enters go() for #auth instead of rendering here.
-        location.hash = 'auth';
+        // remember the real destination, then reassign
+        // location.hash, which fires 'hashchange' and re-enters
+        // go() for #auth/login instead of rendering here.
+        try { sessionStorage.setItem(REDIRECT_KEY, location.hash.slice(1)); } catch (error) {}
+        location.hash = 'auth/login';
         return;
     }
 
     document.body.dataset.page = page;
     Kindling.$$('.screen').forEach(s => s.classList.toggle('is-active', s.id === page));
     Kindling.$$('[data-route]').forEach(a => a.dataset.route === page ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
-    Kindling.onRoute[page]?.();
+    Kindling.onRoute[page]?.(sub);
 };
 
 addEventListener('hashchange', Kindling.go);
