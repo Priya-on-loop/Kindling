@@ -300,9 +300,25 @@
               <h3 id="timeHead">Time spent exploring</h3>
               <ul class="time-bars" id="timeBars"></ul>
             </section>
-            <section class="refl-card" aria-labelledby="jHead">
-              <h3 id="jHead">Exploration timeline</h3>
-              <ol class="journey-list" id="journey"></ol>
+            <section class="refl-card take-card" aria-labelledby="takeHead">
+              <div class="take-head">
+                <p class="eyebrow warm" id="takeHead">Your take</p>
+                <span class="private-pill">🔒 Private to you</span>
+              </div>
+              <h3 class="take-title">How does this feel so far?</h3>
+              <p class="refl-sub">Anything you want to see more or less of, or a role that caught you off guard? This is just for you. Kindling listens, it doesn't grade.</p>
+
+              <form class="take-form" id="takeForm">
+                <label for="takeInput" class="sr-only">Your take</label>
+                <textarea id="takeInput" maxlength="1000" rows="4" placeholder="Tell Kindling what you noticed…"></textarea>
+                <div class="take-form-foot">
+                  <span class="take-counter" id="takeCounter">0/1000</span>
+                  <button type="submit" class="btn-gold sm" id="takeSave" disabled>Save note</button>
+                </div>
+              </form>
+
+              <div class="take-chips" id="takeChips" hidden></div>
+              <div class="take-notes" id="takeNotes"></div>
             </section>
           </div>
           <section class="refl-card refl-right" aria-labelledby="calHead">
