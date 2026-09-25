@@ -251,7 +251,11 @@
                     authErr.textContent = data.detail || "That password isn't right. Try again or reset it.";
                 }
                 else if (response.status === 409) {
-                    authErr.textContent = data.detail || "You already have an account with this email. Log in instead?";
+                    // The one case that keeps its own link, per spec -
+                    // ignores data.detail on purpose so the backend's
+                    // plainer copy can't silently replace this exact
+                    // wording+link.
+                    authErr.innerHTML = `You already have an account with this email. <a href="#auth/login">Log in instead?</a>`;
                 }
                 else {
                     authErr.textContent = data.detail || 'Something went wrong. Please try again.';
