@@ -11,7 +11,7 @@ Kindling.$$ = (s, r = document) => [...r.querySelectorAll(s)];
 
 Kindling.onRoute = {};
 
-Kindling.routes = ['home', 'explore', 'inference', 'graph', 'reflection', 'settings', 'auth'];
+Kindling.routes = ['home', 'explore', 'inference', 'graph', 'reflection', 'settings', 'auth', 'about', 'privacy', 'terms'];
 
 /*
  * Explore, Inference, Career Graph, and Reflection require a real

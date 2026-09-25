@@ -18,7 +18,7 @@ ROOT_DIR = BACKEND_DIR.parent
 sys.path.append(str(BACKEND_DIR))
 sys.path.append(str(ROOT_DIR / "Scripts"))
 
-from db import get_latest_inference_scores, get_latest_trait_decisions
+from db import get_latest_inference_scores, get_latest_trait_decisions, get_session_user_id, get_active_reflection_preferences
 from soc_titles import major_group, minor_group, broad_group, major_title, minor_title
 from matching import match_occupations, load_career_graph, RIASEC_COLUMNS
 
@@ -195,7 +195,8 @@ def group_into_fields(occupations: list) -> dict:
     return split_fields
 
 
-def select_occupations(scores: dict, shown_patterns: list, high_points: dict):
+def select_occupations(scores: dict, shown_patterns: list, high_points: dict,
+                        hidden_ids: frozenset = frozenset(), hidden_field_codes: frozenset = frozenset()):
     """
     Ranks the real candidate pool once (existing FAISS matching
     logic, similarity kept internal/never returned to the UI), buckets
@@ -205,8 +206,20 @@ def select_occupations(scores: dict, shown_patterns: list, high_points: dict):
     (checked by actually re-running the Level-2 grouping on every
     trial addition), and no pattern exceeding MAX_PATTERN_SHARE of the
     running total. Never fabricates a candidate to hit a quota.
+
+    hidden_ids/hidden_field_codes are real per-user preferences from
+    Reflection's "Your take" notes (see db.get_active_reflection_
+    preferences) - excluded from the candidate pool itself, so a
+    hidden occupation/field can never be selected in the first place,
+    same as if it didn't exist in the dataset.
     """
-    all_occs_by_id = {occ["id"]: occ for occ in load_career_graph()}
+    all_occs_by_id = {
+        occ["id"]: occ for occ in load_career_graph()
+        if occ["id"] not in hidden_ids
+        and minor_group(occ["id"]) not in hidden_field_codes
+        and major_group(occ["id"]) not in hidden_field_codes
+        and broad_group(occ["id"]) not in hidden_field_codes
+    }
 
     # Rank the ENTIRE real dataset, not an arbitrary top-N slice: a
     # secondary shown pattern's honest matches often rank lower in
@@ -270,6 +283,131 @@ def select_occupations(scores: dict, shown_patterns: list, high_points: dict):
 
     all_selected = [occ for occs in selected_by_pattern.values() for occ in occs]
     return selected_by_pattern, all_selected
+
+
+# A student's real "focus this field" note explicitly asks to bypass
+# the normal MAX_PER_FIELD cap for that one field - these are the
+# real caps on how far that bypass goes.
+FOCUS_EXTRA_CAP = 4
+FOCUS_EXTRA_CAP_DEEP = 8
+
+
+def nearest_by_task_similarity(seed_occs: list, candidates: list, n: int) -> list:
+    """
+    Real-data-only fallback for expand_focus_field when a focused
+    field's own SOC group is exhausted: ranks `candidates` by TF-IDF
+    cosine similarity between their own real sample_tasks text and
+    the focused field's real sample_tasks text. This is
+    career_tree.py's Rule-2 "task-embedding similarity" (deferred at
+    the top of compute_cross_links pending real embeddings) filled in
+    with a simpler real-text method instead - never a fabricated
+    occupation, and never text outside what's actually in
+    occupation_data.csv/task_statements.csv.
+    """
+    if n <= 0 or not seed_occs or not candidates:
+        return []
+
+    seed_text = " ".join(t["text"] for occ in seed_occs for t in occ.get("sample_tasks", []))
+    if not seed_text.strip():
+        return []
+
+    cand_texts = [" ".join(t["text"] for t in occ.get("sample_tasks", [])) for occ in candidates]
+    valid = [(occ, text) for occ, text in zip(candidates, cand_texts) if text.strip()]
+    if not valid:
+        return []
+
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    vectorizer = TfidfVectorizer(stop_words="english")
+    matrix = vectorizer.fit_transform([seed_text] + [text for _, text in valid])
+    sims = cosine_similarity(matrix[0:1], matrix[1:])[0]
+
+    ranked = sorted(zip(valid, sims), key=lambda pair: -pair[1])
+    return [occ for (occ, _text), _sim in ranked[:n]]
+
+
+def expand_focus_field(selected_by_pattern: dict, all_selected: list, focus_field_code: str,
+                        go_deeper: bool, hidden_ids: frozenset) -> tuple:
+    """
+    A real "focus on this field" preference: pull additional REAL
+    occupations into whichever pattern currently has a field matching
+    focus_field_code - same real SOC group first, nearest real
+    task-text similarity as a fallback once that group is exhausted.
+    Never fabricates an occupation outside occupation_data.csv. If
+    the field isn't actually present in this student's current tree
+    at all (their real evidence doesn't currently surface it under
+    any shown pattern), this is a silent no-op rather than inventing
+    a new area/field to attach it to.
+    """
+    already_ids = {occ["id"] for occ in all_selected}
+    all_occs = {
+        occ["id"]: occ for occ in load_career_graph()
+        if occ["id"] not in hidden_ids
+    }
+
+    cap = FOCUS_EXTRA_CAP_DEEP if go_deeper else FOCUS_EXTRA_CAP
+
+    target_pattern = None
+    for pattern, occs in selected_by_pattern.items():
+        if focus_field_code in group_into_fields(occs):
+            target_pattern = pattern
+            break
+    if target_pattern is None:
+        return selected_by_pattern, all_selected
+
+    def in_field(occ_id):
+        return (minor_group(occ_id) == focus_field_code
+                or major_group(occ_id) == focus_field_code
+                or broad_group(occ_id) == focus_field_code)
+
+    same_group_pool = [occ for occ_id, occ in all_occs.items() if occ_id not in already_ids and in_field(occ_id)]
+    added = same_group_pool[:cap]
+
+    if len(added) < cap:
+        seed_occs = [occ for occ_id, occ in all_occs.items() if in_field(occ_id)]
+        excluded = already_ids | {o["id"] for o in added}
+        candidates = [occ for occ_id, occ in all_occs.items() if occ_id not in excluded]
+        added += nearest_by_task_similarity(seed_occs, candidates, cap - len(added))
+
+    for occ in added:
+        selected_by_pattern[target_pattern].append(occ)
+        all_selected.append(occ)
+
+    return selected_by_pattern, all_selected
+
+
+def _load_reflection_shaping(session_id: str):
+    """
+    Real per-user Reflection preferences (Your take notes -
+    hideFields/focusField), resolved to real SOC ids/field-codes at
+    save time (backend/reflection_apply.py). Read fresh on every tree
+    build, keyed off the session's real owning account - so removing
+    a preference (deleting its chip or its note) takes effect on the
+    very next Career Graph load with no separate "undo" step, and a
+    preference set from one thread still applies when this student
+    opens a different thread later. Anonymous sessions (no account)
+    get no shaping - there is nowhere real to persist it for them.
+    """
+    user_id = get_session_user_id(session_id)
+    if not user_id:
+        return frozenset(), frozenset(), []
+
+    prefs = get_active_reflection_preferences(user_id)
+    hidden_ids, hidden_field_codes = set(), set()
+    focus_targets = []
+
+    for p in prefs:
+        extra = p.get("extra") or {}
+        if p["kind"] == "hide_field":
+            if extra.get("node_type") == "career" and extra.get("soc"):
+                hidden_ids.add(extra["soc"])
+            elif extra.get("field_code"):
+                hidden_field_codes.add(extra["field_code"])
+        elif p["kind"] == "focus_field" and extra.get("field_code"):
+            focus_targets.append((extra["field_code"], bool(extra.get("go_deeper"))))
+
+    return frozenset(hidden_ids), frozenset(hidden_field_codes), focus_targets
 
 
 def compute_cross_links(all_selected: list, pattern_by_occ_id: dict, high_points: dict) -> list:
@@ -346,7 +484,15 @@ def build_career_tree(session_id: str) -> dict:
         return {"nodes": [{"id": "you", "type": "hub", "label": "You"}], "edges": []}
 
     high_points = load_interest_high_points()
-    selected_by_pattern, all_selected = select_occupations(scores, shown_patterns, high_points)
+    hidden_ids, hidden_field_codes, focus_targets = _load_reflection_shaping(session_id)
+    selected_by_pattern, all_selected = select_occupations(
+        scores, shown_patterns, high_points, hidden_ids, hidden_field_codes
+    )
+
+    for focus_field_code, go_deeper in focus_targets:
+        selected_by_pattern, all_selected = expand_focus_field(
+            selected_by_pattern, all_selected, focus_field_code, go_deeper, hidden_ids
+        )
 
     # A pattern can have real Inference-score evidence yet end up
     # with zero real occupations whose own IH high-point actually

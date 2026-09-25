@@ -61,6 +61,35 @@ def init_db():
             value       TEXT NOT NULL,
             created_at  TEXT NOT NULL
         );
+
+        -- Reflection's "Your take" notes. One row per saved note,
+        -- real account-scoped (not session-scoped like everything
+        -- else) so a preference set on one thread still applies when
+        -- the student opens a different thread's Career Graph later.
+        CREATE TABLE IF NOT EXISTS reflection_notes (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     TEXT NOT NULL,
+            session_id  TEXT NOT NULL,
+            note_text   TEXT NOT NULL,
+            created_at  TEXT NOT NULL
+        );
+
+        -- One row per individual extracted+resolved preference
+        -- (a single hidden field, the one focus field, one pattern
+        -- adjustment, one "new to them" mention) so a single chip's
+        -- x can delete just that preference without touching the
+        -- rest of its parent note, and deleting the note cascades to
+        -- every preference it produced.
+        CREATE TABLE IF NOT EXISTS reflection_preferences (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            note_id     INTEGER NOT NULL,
+            user_id     TEXT NOT NULL,
+            kind        TEXT NOT NULL CHECK (kind IN ('hide_field', 'focus_field', 'pattern_adjust', 'new_to_them')),
+            label       TEXT NOT NULL,
+            extra       TEXT,
+            created_at  TEXT NOT NULL,
+            FOREIGN KEY (note_id) REFERENCES reflection_notes(id)
+        );
     """)
 
     # sessions already existed (with real data) before user_id was
@@ -479,6 +508,154 @@ def get_field_summary() -> dict:
     rows = cursor.fetchall()
     conn.close()
     return {r["event_type"]: {"count": r["total_count"], "last_seen": r["last_seen"]} for r in rows}
+
+
+# =====================================================================
+# REFLECTION NOTES ("Your take") — real per-user preferences
+# =====================================================================
+
+def create_reflection_note(user_id: str, session_id: str, note_text: str) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cursor = conn.execute(
+        "INSERT INTO reflection_notes (user_id, session_id, note_text, created_at) VALUES (?, ?, ?, ?)",
+        (user_id, session_id, note_text, now)
+    )
+    note_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return note_id
+
+
+def add_reflection_preference(note_id: int, user_id: str, kind: str, label: str, extra: dict | None = None) -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_db()
+    cursor = conn.execute(
+        "INSERT INTO reflection_preferences (note_id, user_id, kind, label, extra, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (note_id, user_id, kind, label, json.dumps(extra) if extra is not None else None, now)
+    )
+    pref_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return pref_id
+
+
+def get_reflection_notes_for_user(user_id: str) -> list[dict]:
+    """Every saved note for this account, newest first, each with its
+    own resolved preferences attached (so the UI never has to stitch
+    the two tables together itself)."""
+    conn = get_db()
+    note_rows = conn.execute(
+        "SELECT id, session_id, note_text, created_at FROM reflection_notes WHERE user_id = ? ORDER BY id DESC",
+        (user_id,)
+    ).fetchall()
+    pref_rows = conn.execute(
+        "SELECT id, note_id, kind, label, extra, created_at FROM reflection_preferences WHERE user_id = ? ORDER BY id ASC",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+
+    prefs_by_note = {}
+    for row in pref_rows:
+        prefs_by_note.setdefault(row["note_id"], []).append({
+            "id": row["id"],
+            "kind": row["kind"],
+            "label": row["label"],
+            "extra": json.loads(row["extra"]) if row["extra"] else None,
+            "created_at": row["created_at"],
+        })
+
+    return [
+        {
+            "id": row["id"],
+            "session_id": row["session_id"],
+            "note_text": row["note_text"],
+            "created_at": row["created_at"],
+            "preferences": prefs_by_note.get(row["id"], []),
+        }
+        for row in note_rows
+    ]
+
+
+def get_active_reflection_preferences(user_id: str) -> list[dict]:
+    """Flat list of every currently-active preference for this user
+    (no note grouping) — what career_tree.py and the pattern-adjust
+    undo logic actually read to apply/reverse effects."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, note_id, kind, label, extra, created_at FROM reflection_preferences WHERE user_id = ? ORDER BY id ASC",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    return [
+        {
+            "id": row["id"],
+            "note_id": row["note_id"],
+            "kind": row["kind"],
+            "label": row["label"],
+            "extra": json.loads(row["extra"]) if row["extra"] else None,
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+def get_reflection_preference(pref_id: int) -> dict | None:
+    conn = get_db()
+    row = conn.execute(
+        "SELECT id, note_id, user_id, kind, label, extra, created_at FROM reflection_preferences WHERE id = ?",
+        (pref_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row["id"], "note_id": row["note_id"], "user_id": row["user_id"],
+        "kind": row["kind"], "label": row["label"],
+        "extra": json.loads(row["extra"]) if row["extra"] else None,
+        "created_at": row["created_at"],
+    }
+
+
+def get_preferences_for_note(note_id: int) -> list[dict]:
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, note_id, user_id, kind, label, extra, created_at FROM reflection_preferences WHERE note_id = ?",
+        (note_id,)
+    ).fetchall()
+    conn.close()
+    return [
+        {
+            "id": row["id"], "note_id": row["note_id"], "user_id": row["user_id"],
+            "kind": row["kind"], "label": row["label"],
+            "extra": json.loads(row["extra"]) if row["extra"] else None,
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+def get_reflection_note_owner(note_id: int) -> str | None:
+    conn = get_db()
+    row = conn.execute("SELECT user_id FROM reflection_notes WHERE id = ?", (note_id,)).fetchone()
+    conn.close()
+    return row["user_id"] if row else None
+
+
+def delete_reflection_preference(pref_id: int) -> None:
+    conn = get_db()
+    conn.execute("DELETE FROM reflection_preferences WHERE id = ?", (pref_id,))
+    conn.commit()
+    conn.close()
+
+
+def delete_reflection_note(note_id: int) -> None:
+    """Cascades: removes every preference this note produced too."""
+    conn = get_db()
+    conn.execute("DELETE FROM reflection_preferences WHERE note_id = ?", (note_id,))
+    conn.execute("DELETE FROM reflection_notes WHERE id = ?", (note_id,))
+    conn.commit()
+    conn.close()
 
 
 if __name__ == "__main__":

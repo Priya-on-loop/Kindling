@@ -109,6 +109,22 @@
         }));
     }
 
+    /*
+     * Unlike wireChipClicks (prefill only), these send immediately —
+     * for the two real Career Graph intro-flow buttons ("Try a small
+     * task" / "Ask a doubt") returned by the backend as
+     * MessageResponse.choices. Clicking one sends that exact label as
+     * the next real message.
+     */
+    function wireChoiceClicks(container) {
+        $$('.chip', container).forEach(c => c.addEventListener('click', () => sendMessage(c.textContent)));
+    }
+
+    /*
+     * `chips` can be: true (the 4 generic starters), an array of
+     * specific prompt strings (e.g. one real, occupation-grounded
+     * prompt), or omitted/false for none.
+     */
     function addKindling(text, chips) {
         const wrap = document.createElement('div');
         wrap.className = 'note-kindling';
@@ -119,7 +135,7 @@
             body.innerHTML = '<span class="typing" aria-label="Kindling is thinking"><i></i><i></i><i></i></span>';
         }
         else {
-            body.innerHTML = formatResponseHtml(text);
+            body.innerHTML = K.renderMarkdown(text);
 
             const chipList = chips === true ? starters : Array.isArray(chips) ? chips : null;
 
@@ -166,19 +182,25 @@
         container.appendChild(row);
     }
 
-    function showOccupationContext(context) {
+    async function showOccupationContext(context) {
         if (!context?.title) return;
 
         const body = addKindling(`Continuing from: ${context.title}`, false);
 
+        /*
+         * The Career Graph panel's own buttons (a specific "Questions
+         * you could ask" item, "Try it with Kindling", or the main
+         * CTA) each carry their own real, specific text. This used to
+         * only prefill the composer and leave it for the user to hit
+         * send — in practice that read as "the chat box is empty,
+         * I have to retype the question." Send it through the same
+         * real sendMessage() the composer itself uses (same guard
+         * against double-send while a request is in flight, same
+         * scroll-to-message behavior), so clicking any of the three
+         * buttons actually asks the question.
+         */
         if (context.prefillMessage) {
-            input.value = context.prefillMessage;
-            sendBtn.disabled = false;
-            autoGrowInput();
-
-            input.focus();
-            const len = input.value.length;
-            try { input.setSelectionRange(len, len); } catch (e) {}
+            await sendMessage(context.prefillMessage, { introRequest: !!context.isIntroFlow });
             return;
         }
 
@@ -606,6 +628,16 @@
             setLoading(false);
         }
 
+        /*
+         * Kindling always speaks first; the grounded auto-send (if
+         * any) is the next real turn, not a race with the opening
+         * one — runs only after this function's own setLoading(false)
+         * above, so sendMessage()'s own isLoading guard (inside
+         * showOccupationContext) doesn't see a stale in-flight state
+         * and silently no-op.
+         */
+        await showOccupationContext(context);
+
     }
 
     async function restoreSession(sessionId) {
@@ -639,7 +671,7 @@
 
     }
 
-    async function sendMessage(text) {
+    async function sendMessage(text, opts = {}) {
 
         text = text.trim();
         if (!text || isLoading) return;
@@ -670,7 +702,8 @@
                         title: activeContext.title,
                         description: activeContext.description,
                         tasks: activeContext.tasks
-                    } : undefined
+                    } : undefined,
+                    introRequest: opts.introRequest || undefined
                 })
             });
 
@@ -678,7 +711,15 @@
 
             const data = await response.json();
 
-            pending.innerHTML = data.reply ? formatResponseHtml(data.reply) : '';
+            pending.innerHTML = data.reply ? K.renderMarkdown(data.reply) : '';
+
+            if (Array.isArray(data.choices) && data.choices.length) {
+                const chipsEl = document.createElement('div');
+                chipsEl.className = 'starters';
+                chipsEl.innerHTML = data.choices.map(s => `<button type="button" class="chip">${esc(s)}</button>`).join('');
+                wireChoiceClicks(chipsEl);
+                pending.appendChild(chipsEl);
+            }
 
             if (typeof data.question_index === 'number') questionIndex = data.question_index;
             if (typeof data.total_questions === 'number') totalQuestions = data.total_questions;
@@ -733,25 +774,40 @@
 
     K.onRoute.explore = async () => {
 
+        /*
+         * Read on EVERY entry, not just the first — a second
+         * "Explore this in a conversation" click later in the same
+         * session re-fires this route handler too, and needs its new
+         * context picked up even though `started` is already true by
+         * then. Previously `started` short-circuited before this
+         * line ever ran again, so a repeat click silently did
+         * nothing at all.
+         */
         const context = takeOccupationContext();
 
-        if (context) {
-            activeContext = context;
+        if (started) {
+            if (context) {
+                activeContext = context;
+                await showOccupationContext(context);
+            }
+            return;
         }
-
-        if (started && !context) return;
         started = true;
 
         loadThreads();
+
+        // Kept in activeContext (not just used for the "Continuing
+        // from" card) so sendMessage() actually sends it to the
+        // backend on every turn of this conversation, not just
+        // cosmetically in the UI.
+        activeContext = context;
 
         const existingSessionId = K.getSessionId();
 
         if (existingSessionId) {
             const restored = await restoreSession(existingSessionId);
             if (restored) {
-                if (context) {
-                    showOccupationContext(context);
-                }
+                await showOccupationContext(context);
                 return;
             }
         }

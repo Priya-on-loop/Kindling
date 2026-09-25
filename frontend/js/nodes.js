@@ -22,6 +22,36 @@
 
     K.esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+    /*
+     * Small, dependency-free markdown-ish renderer for Kindling chat
+     * replies. Escapes HTML FIRST, then only ever introduces tags via
+     * these fixed regexes over the already-escaped text — so no user-
+     * or LLM-supplied text can ever inject real HTML (there's no way
+     * for escaped input to end up containing '<' or '>' again). Only
+     * supports bold, italics, inline code, and bullet/numbered lists,
+     * since that's all real chat replies use.
+     */
+    K.renderMarkdown = function renderMarkdown(raw) {
+        const inline = s => s
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/_([^_]+)_/g, '<em>$1</em>');
+
+        const blocks = K.esc(raw).split(/\n{2,}/);
+        return blocks.map(block => {
+            const lines = block.split('\n').filter(l => l.trim().length);
+            if (!lines.length) return '';
+            if (lines.every(l => /^[-*]\s+/.test(l))) {
+                return '<ul>' + lines.map(l => `<li>${inline(l.replace(/^[-*]\s+/, ''))}</li>`).join('') + '</ul>';
+            }
+            if (lines.every(l => /^\d+\.\s+/.test(l))) {
+                return '<ol>' + lines.map(l => `<li>${inline(l.replace(/^\d+\.\s+/, ''))}</li>`).join('') + '</ol>';
+            }
+            return `<p>${lines.map(inline).join('<br>')}</p>`;
+        }).join('');
+    };
+
     K.toast = function toast(msg) {
         const t = $('#toast'); t.textContent = msg; t.classList.add('is-shown');
         clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('is-shown'), 2200);

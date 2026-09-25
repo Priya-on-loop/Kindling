@@ -493,6 +493,16 @@
         if (askBtn) {
             const node = selected ? byId[selected] : null;
 
+            /*
+             * Only the main CTA ("Explore this in a conversation")
+             * starts the guided intro flow (plain explanation + real
+             * "Try a small task" / "Ask a doubt" buttons) — "Try it
+             * with Kindling" and each "Questions you could ask" item
+             * already carry a specific real question, so they keep
+             * auto-sending straight into open conversation.
+             */
+            const isIntroFlow = !!askBtn.closest('.panel-cta');
+
             if (node) {
                 try {
                     sessionStorage.setItem('kindling_context_occupation', JSON.stringify({
@@ -500,7 +510,8 @@
                         title: node.fullTitle || node.label,
                         description: node.description || null,
                         tasks: node.tasks || null,
-                        prefillMessage: askBtn.dataset.ask
+                        prefillMessage: askBtn.dataset.ask,
+                        isIntroFlow
                     }));
                 }
                 catch (error) {}
