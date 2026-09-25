@@ -45,6 +45,14 @@ from db import (
     set_session_pinned,
     delete_session,
     delete_empty_sessions_for_user,
+    create_reflection_note,
+    add_reflection_preference,
+    get_reflection_notes_for_user,
+    get_reflection_preference,
+    get_preferences_for_note,
+    get_reflection_note_owner,
+    delete_reflection_preference,
+    delete_reflection_note,
 )
 
 from backend.shap_explainer import explain_match
@@ -55,6 +63,14 @@ from matching import match_occupations, load_career_graph, MAX_RESULTS
 from title_generator import generate_title, build_fallback_title
 from career_tree import build_career_tree
 from tree_enrichment import enrich_tree_with_ai
+from reflection_extract import extract_reflection_note
+from reflection_apply import (
+    resolve_hide_field,
+    resolve_focus_field,
+    resolve_new_to_them,
+    apply_pattern_adjustment,
+    undo_pattern_adjustment,
+)
 
 TITLE_FALLBACK_TURN = 1
 TITLE_AI_TURN = 3
@@ -128,54 +144,44 @@ Rules:
 - Never steer toward a specific career or job title. Stay open-ended.
 - Output ONLY the question — no preamble, no commentary."""
 
-# Improved Phase 2 Prompt
 PHASE2_SYSTEM_PROMPT = """\
-You are Kindling, a warm, encouraging mentor talking with a HIGH-SCHOOL \
-STUDENT who is casually exploring a possible interest or direction. They are \
-not a professional planning a curriculum, not a college student choosing a \
-major, and have not committed to anything — they're just curious.
+You are Kindling, a warm, encouraging mentor talking with a high-school student who is casually exploring possible interests, fields, skills, hobbies, or directions. They are not a professional planning a curriculum, not necessarily choosing a college major, and not committed to anything yet.
 
-Rules:
-- Keep answers SHORT: 3 sentences maximum. Never write long paragraphs.
-- Use plain, everyday language a high schooler would use with a friend. \
-  No jargon dumps, no numbered or bulleted lists of prerequisites, no dense \
-  technical breakdowns, and no naming tools, software, or coursework without \
-  explaining in one plain phrase why it matters.
-- If a question is genuinely broad or technical (like "what math do I need for \
-  this?"), give ONE simple, honest, encouraging answer first — not an exhaustive \
-  syllabus. Only add more technical detail if the student asks a follow-up \
-  asking for it.
-- Answer the student's actual question directly and conversationally, the way \
-  a friendly mentor would explain something over coffee — never the way a \
-  textbook, a curriculum planner, or a job-requirements page would.
-- Help them explore hobbies, skills, projects, and general fields they are \
-  curious about.
-- Be encouraging and open-ended. Do not push them toward rigid job titles \
-  unless they specifically ask.
-- Keep the tone casual, warm, and human — like a mentor, not a manual.
+TONE AND LANGUAGE
+- Speak like a knowledgeable older friend over coffee: warm, casual, encouraging, and human.
+- Use plain, everyday language that a high-school student can easily follow.
+- Keep the facts accurate; simplify the wording, not the meaning.
+- When a technical word is genuinely useful, explain it briefly in plain language the first time.
+- Do not assume the student already knows technical terms.
+- Match the student's energy: stay relaxed when they are relaxed and enthusiastic when they are excited.
 
-Formatting & Tone Rules:
-- NEVER write giant walls of text or dense paragraphs.
-- Use short, bite-sized bullet points (using '- ') whenever explaining ideas, answering questions, or listing details so it's super fast and easy to read.
-- Keep the overall response short (under 70 words total).
-- Use plain, everyday language a high schooler would use with a friend.
-- End with ONE short, warm question to keep the conversation going.
+RESPONSE RULES
+- Answer the student's actual question directly first.
+- Keep the response short and bite-sized: normally no more than 3 short sentences or a few very short bullets.
+- Never write a wall of text, dense paragraph, syllabus, prerequisite list, or job-requirements page.
+- Do not dump tools, technologies, courses, or technical concepts unless they are relevant to the question.
+- If the question is broad or technical, give ONE honest, useful answer first instead of an exhaustive roadmap. Add deeper technical detail only when the student asks for it.
+- Use a small real-world example when it makes the idea easier to understand.
+- Use short bullet points only when they genuinely make the answer easier to scan.
 
-GOLDEN RULES FOR HIGH ENGAGEMENT:
-1. TALK LIKE A COOL MENTOR: Be enthusiastic, warm, and casual. Speak like a friend over coffee, never a textbook or resume guide.
-2. HIGHLY SCANNABLE: Never write walls of text or formal numbered lists. Use short lines and 2-3 quick bullet points with bold highlights (`**bold**`).
-3. BRING IDEAS TO LIFE: Use vivid, real-world examples, vibes, or creative angles (e.g., storytelling, music, aesthetics, building stuff).
-4. KEEP IT BITE-SIZED: Keep total responses under 50-60 words.
-5. END WITH A FUN HOOK: Always finish with a low-pressure, genuinely curious question about what *they* think or find cool.
+EXPLORATION
+- Help the student explore hobbies, skills, projects, fields, and possible directions without pushing them toward a specific career.
+- Do not turn curiosity into a rigid career plan unless the student explicitly asks for one.
+- Never evaluate, judge, rank, or score the student's intelligence, potential, or suitability.
+- Never act like a therapist.
+- If the student seems unsure or says they do not know, respond gently and give one small, low-pressure next step.
 
-Extra important rules for beginners:
-- If they ask for a "demo", "example", or "show me", give something FUN and TINY \
-  that a complete beginner can enjoy in 30 seconds. Never give a hard challenge, \
-  coding problem, or anything that could intimidate them.
-- If they seem unsure, shy, or say things like "I don't know", be extra gentle \
-  and ask one small, low-pressure question.
-- Match their energy. If they're chill, stay chill. If they're excited, match it.
-- Never assume they already know technical terms.
+PRACTICAL TASKS
+When the student asks for something to try, adapt the difficulty to what they have actually shown they can handle:
+- Beginner: give one tiny activity they can complete in a few minutes. If they ask for a demo or example, make it fun and achievable in about 30 seconds rather than giving a difficult challenge.
+- Intermediate: give one small activity that builds naturally on something they have already tried.
+- Expert: give a small real project or practical challenge with a few meaningful pieces.
+- Never stack difficulty levels or introduce a harder task until the student indicates they are ready or asks for something harder.
+
+ENGAGEMENT
+- Bring ideas to life with concrete examples, relatable situations, creative angles, or real-world connections when useful.
+- Keep the conversation open and low-pressure.
+- When a follow-up question would genuinely help the conversation continue, end with ONE short, natural question.
 """
 
 CLOSING_MESSAGE = (
@@ -225,11 +231,17 @@ class MessageRequest(BaseModel):
     session_id: str
     message: str
     context: Optional[OccupationContext] = None
+    # True only on the one message sent right after a student arrives
+    # from a real Career Graph node click — see CAREER_GRAPH_INTRO_ADDITION.
+    introRequest: Optional[bool] = None
 
 class MessageResponse(BaseModel):
     reply: str
     question_index: int
     total_questions: int
+    # Set only on an introRequest reply — two real tappable choice
+    # labels the frontend renders as starter-chip-style buttons.
+    choices: Optional[List[str]] = None
 
 class EventLogRequest(BaseModel):
     session_id: str
@@ -493,11 +505,12 @@ def chat_message(req: MessageRequest) -> MessageResponse:
         })
 
         history = get_messages(req.session_id)
+        system_prompt = PHASE2_SYSTEM_PROMPT + build_context_note(req.context)
+        if req.introRequest:
+            system_prompt += CAREER_GRAPH_INTRO_ADDITION
         try:
-            reply = call_llm(
-                messages=history,
-                system_prompt=PHASE2_SYSTEM_PROMPT + build_context_note(req.context)
-            )
+            # Use Phase 2 conversational prompt
+            reply = call_llm(messages=history, system_prompt=system_prompt)
         except Exception as e:
             print(f"\n[PHASE 2 LLM ERROR]: {e}\n")
             reply = "I'm here to help you explore! What else would you like to talk about?"
@@ -508,10 +521,14 @@ def chat_message(req: MessageRequest) -> MessageResponse:
             "reply_length": len(reply)
         })
 
+        choices = ["Try a small task", "Ask a doubt"] if req.introRequest else None
+
+        # Phase 2 messages DO NOT trigger score_session()!
         return MessageResponse(
             reply=reply,
             question_index=question_index,
             total_questions=TOTAL_PHASE1_QUESTIONS,
+            choices=choices,
         )
 
 
@@ -664,7 +681,214 @@ def get_user_profile(session_id: str):
         "inference_failed": scores.get("inference_failed", False)
     }
 
-# ── Telemetry & Analytics ─────────────────────────────────────
+@app.post("/api/user/profile/update")
+def update_user_profile(req: ProfileUpdateRequest):
+    if not session_exists(req.session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    inf = req.inference
+
+    missing_keys = REQUIRED_DIMENSIONS - set(inf.keys())
+    if missing_keys:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required dimensions: {list(missing_keys)}. All 6 dimensions must be provided."
+        )
+
+    validated_inference = {}
+    for k in REQUIRED_DIMENSIONS:
+        v = inf[k]
+        if not isinstance(v, (int, float)) or isinstance(v, bool) or v < 0.0 or v > 1.0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid value for '{k}': {v}. All dimension values must be numbers between 0.0 and 1.0."
+            )
+        validated_inference[k] = float(v)
+
+    log_event(req.session_id, "profile_updated", validated_inference)
+
+    return {
+        "status": "success",
+        "session_id": req.session_id,
+        "message": "User profile successfully updated",
+        "inference": validated_inference
+    }
+
+@app.post("/api/user/trait/decision")
+def trait_decision(req: TraitDecisionRequest):
+    if not session_exists(req.session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if req.trait not in REQUIRED_DIMENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid trait '{req.trait}'. Must be one of: {list(REQUIRED_DIMENSIONS)}"
+        )
+
+    if req.action not in ["accept", "reject"]:
+        raise HTTPException(status_code=400, detail="Action must be 'accept' or 'reject'")
+
+    scores = get_latest_inference_scores(req.session_id)
+    if not scores:
+        raise HTTPException(status_code=404, detail="Inference scores are not available yet.")
+
+    clean_scores = {k: float(v) for k, v in scores.items() if k in REQUIRED_DIMENSIONS}
+
+    if req.action == "accept":
+        log_event(req.session_id, "trait_accepted", {"trait": req.trait, "score": clean_scores[req.trait]})
+        return {
+            "status": "success",
+            "session_id": req.session_id,
+            "message": f"Trait '{req.trait}' accepted.",
+            "inference": clean_scores
+        }
+
+    elif req.action == "reject":
+        new_val = req.override_value if req.override_value is not None else 0.0
+        if new_val < 0.0 or new_val > 1.0:
+            raise HTTPException(status_code=400, detail="override_value must be between 0.0 and 1.0")
+
+        clean_scores[req.trait] = float(new_val)
+        log_event(req.session_id, "trait_rejected", {"trait": req.trait, "new_score": new_val})
+        log_event(req.session_id, "profile_updated", clean_scores)
+
+        return {
+            "status": "success",
+            "session_id": req.session_id,
+            "message": f"Trait '{req.trait}' rejected and updated to {new_val}.",
+            "inference": clean_scores
+        }
+
+# ── Reflection Notes ("Your take") ────────────────────────────
+# The gentle, real alternative to Settings' full "Reset exploration":
+# a signed-in student's own take on their results, extracted by a
+# real strict-JSON-schema LLM call (ai_core/reflection_extract.py),
+# resolved against their real current tree (backend/reflection_
+# apply.py) and applied via career_tree.py (hide/focus) or the exact
+# same mechanism Pattern Calibration already uses (pattern adjust).
+
+class ReflectionNoteRequest(BaseModel):
+    token: str
+    session_id: str
+    note_text: str
+
+
+@app.post("/api/reflection/note")
+def save_reflection_note(req: ReflectionNoteRequest):
+    user_id = resolve_user_id(req.token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or missing token.")
+
+    if not session_exists(req.session_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    owner_id = get_session_user_id(req.session_id)
+    if owner_id != user_id:
+        raise HTTPException(status_code=403, detail="This thread doesn't belong to you.")
+
+    note_text = req.note_text.strip()
+    if not note_text:
+        raise HTTPException(status_code=400, detail="Note can't be empty.")
+    if len(note_text) > 1000:
+        raise HTTPException(status_code=400, detail="Note must be 1000 characters or fewer.")
+
+    extraction = extract_reflection_note(note_text)
+
+    # The exact tree this student was actually looking at - cache-
+    # backed (tree_enrichment.py), so this is cheap once their real
+    # Career Graph has already been viewed once this session.
+    tree = build_career_tree(req.session_id)
+    tree = enrich_tree_with_ai(tree, req.session_id)
+
+    note_id = create_reflection_note(user_id, req.session_id, note_text)
+    created_preferences = []
+
+    for mention in extraction["hideFields"]:
+        resolved = resolve_hide_field(mention, tree)
+        if resolved is None:
+            continue  # nothing real in this student's tree matched - never guess
+        pref_id = add_reflection_preference(note_id, user_id, "hide_field", resolved["label"], resolved["extra"])
+        created_preferences.append({"id": pref_id, "kind": "hide_field", "label": resolved["label"]})
+
+    if extraction["focusField"]:
+        resolved = resolve_focus_field(extraction["focusField"], extraction["goDeeper"], tree)
+        if resolved is not None:
+            pref_id = add_reflection_preference(note_id, user_id, "focus_field", resolved["label"], resolved["extra"])
+            created_preferences.append({"id": pref_id, "kind": "focus_field", "label": resolved["label"]})
+
+    for mention in extraction["newToThem"]:
+        resolved = resolve_new_to_them(mention, tree)
+        pref_id = add_reflection_preference(note_id, user_id, "new_to_them", resolved["label"], resolved["extra"])
+        created_preferences.append({"id": pref_id, "kind": "new_to_them", "label": resolved["label"]})
+
+    for item in extraction["patternAdjustments"]:
+        applied = apply_pattern_adjustment(req.session_id, item["pattern"], item["note"])
+        if applied is None:
+            continue  # no live score to adjust yet
+        pref_id = add_reflection_preference(note_id, user_id, "pattern_adjust", item["pattern"], applied)
+        created_preferences.append({"id": pref_id, "kind": "pattern_adjust", "label": item["pattern"]})
+
+    log_event(req.session_id, "reflection_note_saved", {"note_id": note_id, "preference_count": len(created_preferences)})
+
+    return {
+        "status": "success",
+        "note": {
+            "id": note_id,
+            "note_text": note_text,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "preferences": created_preferences,
+        },
+        "extraction": extraction,
+    }
+
+
+@app.get("/api/reflection/notes")
+def list_reflection_notes(token: str):
+    user_id = resolve_user_id(token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or missing token.")
+    return {"status": "success", "notes": get_reflection_notes_for_user(user_id)}
+
+
+@app.delete("/api/reflection/preference/{pref_id}")
+def delete_reflection_preference_endpoint(pref_id: int, token: str):
+    user_id = resolve_user_id(token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or missing token.")
+
+    pref = get_reflection_preference(pref_id)
+    if pref is None:
+        raise HTTPException(status_code=404, detail="Preference not found")
+    if pref["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="This preference doesn't belong to you.")
+
+    if pref["kind"] == "pattern_adjust":
+        undo_pattern_adjustment(pref["extra"])
+
+    delete_reflection_preference(pref_id)
+    return {"status": "success", "id": pref_id}
+
+
+@app.delete("/api/reflection/note/{note_id}")
+def delete_reflection_note_endpoint(note_id: int, token: str):
+    user_id = resolve_user_id(token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or missing token.")
+
+    owner_id = get_reflection_note_owner(note_id)
+    if owner_id is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if owner_id != user_id:
+        raise HTTPException(status_code=403, detail="This note doesn't belong to you.")
+
+    for pref in get_preferences_for_note(note_id):
+        if pref["kind"] == "pattern_adjust":
+            undo_pattern_adjustment(pref["extra"])
+
+    delete_reflection_note(note_id)
+    return {"status": "success", "id": note_id}
+
+# ── Telemetry & Analytics Endpoints ───────────────────────────
 
 @app.post("/api/events/log")
 def record_event(req: EventLogRequest):

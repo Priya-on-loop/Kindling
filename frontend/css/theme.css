@@ -60,6 +60,7 @@
 :root[data-text="large"] .app { zoom: 1.1; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+::selection { background: rgba(245, 196, 106, 0.28); color: inherit; }
 html, body {
   height: 100%;
   background: var(--bg);
@@ -170,13 +171,20 @@ body[data-page="home"].signed-in .pill-outline { display: inline-flex; }
   padding: 24px var(--pad-x) 32px;
   opacity: 0; visibility: hidden;
   transition: opacity 0.45s ease, visibility 0s linear 0.45s;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
 }
+.screen::-webkit-scrollbar { width: 6px; }
+.screen::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); border-radius: 6px; }
+.screen::-webkit-scrollbar-track { background: transparent; }
 .screen.is-active { opacity: 1; visibility: visible; transition: opacity 0.45s ease, visibility 0s; }
 
 /* Map-left / info-right pages share this frame */
 .map-layout {
-  height: 100%;
-  min-height: 560px;
+  /* Flex child of .graph-page (screens.css) now, not the screen's
+     only content — flex:1/min-height:0 lets the compact footer take
+     its own space below without .map-layout overflowing the screen. */
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(340px, 1fr);
   gap: clamp(20px, 3vw, 44px);

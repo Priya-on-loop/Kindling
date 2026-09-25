@@ -203,6 +203,23 @@
           </a>
         </div>
       </div>
+
+      <footer class="site-footer">
+        <div class="site-footer-top">
+          <div class="site-footer-brand">
+            <svg width="13" height="13" aria-hidden="true"><use href="#spark"/></svg>
+            <strong>Kindling</strong>
+            <span class="site-footer-tagline">A space for curiosity, not a test.</span>
+          </div>
+          <ul class="site-footer-links">
+            <li><a href="#about">About</a></li>
+            <li><a href="#privacy">Privacy</a></li>
+            <li><a href="#terms">Terms</a></li>
+            <li><a href="#settings">Settings</a></li>
+          </ul>
+        </div>
+        <p class="site-footer-meta">© 2026 Kindling<br>Career data from O*NET® (<a href="https://www.onetcenter.org/" target="_blank" rel="noopener">onetcenter.org</a>), sponsored by the U.S. Dept. of Labor/ETA</p>
+      </footer>
     </section>
 
     <!-- ==================== 2. EXPLORE ==================== -->
@@ -268,30 +285,49 @@
             <ul class="evidence-list" id="evidenceList"></ul>
           </div>
         </div>
+
+        <footer class="page-foot-compact">
+          <a href="#about">About</a><span class="dot">·</span>
+          <a href="#privacy">Privacy</a><span class="dot">·</span>
+          <a href="#terms">Terms</a><span class="dot">·</span>
+          <a href="#settings">Settings</a><span class="dot">·</span>
+          <span>© 2026 Kindling</span>
+        </footer>
       </div>
     </section>
 
     <!-- ==================== 4. CAREER GRAPH ==================== -->
     <section class="screen" id="graph" aria-label="Career Graph">
-      <div class="map-layout">
-        <div class="map-pane">
-          <div class="graph-frame" id="graphFrame">
-            <svg id="graphMap" role="group" aria-label="Map of fields and careers connected to your exploration">
-              <g id="graphLayer"></g>
-            </svg>
-            <div class="graph-filter segmented" role="radiogroup" aria-label="Show on the map">
-              <button type="button" role="radio" aria-checked="true" data-filter="all">Show everything</button>
-              <button type="button" role="radio" aria-checked="false" data-filter="opened">Only what I've opened</button>
-            </div>
-            <div class="graph-tools">
-              <button class="icon-btn" id="zoomIn" aria-label="Zoom in"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg></button>
-              <button class="icon-btn" id="zoomOut" aria-label="Zoom out"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg></button>
-              <button class="icon-btn" id="zoomFit" aria-label="Fit whole map"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>
-              <span>Drag, scroll to zoom</span>
+      <div class="graph-page">
+        <div class="map-layout">
+          <div class="map-pane">
+            <div class="graph-frame" id="graphFrame">
+              <svg id="graphMap" role="group" aria-label="Map of fields and careers connected to your exploration">
+                <g id="graphLayer"></g>
+              </svg>
+              <div class="graph-filter segmented" role="radiogroup" aria-label="Show on the map">
+                <button type="button" role="radio" aria-checked="true" data-filter="all">Show everything</button>
+                <button type="button" role="radio" aria-checked="false" data-filter="opened">Only what I've opened</button>
+              </div>
+              <div class="graph-tools">
+                <button class="icon-btn" id="zoomIn" aria-label="Zoom in"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg></button>
+                <button class="icon-btn" id="zoomOut" aria-label="Zoom out"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg></button>
+                <button class="icon-btn" id="zoomFit" aria-label="Fit whole map"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>
+                <span>Drag, scroll to zoom</span>
+              </div>
             </div>
           </div>
+
+          <aside class="info-pane" id="graphPanel" aria-live="polite" aria-label="Explore a direction"></aside>
         </div>
-        <aside class="info-pane" id="graphPanel" aria-live="polite" aria-label="Explore a direction"></aside>
+
+        <footer class="page-foot-compact">
+          <a href="#about">About</a><span class="dot">·</span>
+          <a href="#privacy">Privacy</a><span class="dot">·</span>
+          <a href="#terms">Terms</a><span class="dot">·</span>
+          <a href="#settings">Settings</a><span class="dot">·</span>
+          <span>© 2026 Kindling</span>
+        </footer>
       </div>
     </section>
 
@@ -310,9 +346,26 @@
               <h3 id="timeHead">Time spent exploring</h3>
               <ul class="time-bars" id="timeBars"></ul>
             </section>
-            <section class="refl-card" aria-labelledby="jHead">
-              <h3 id="jHead">Exploration timeline</h3>
-              <ol class="journey-list" id="journey"></ol>
+
+            <section class="refl-card take-card" aria-labelledby="takeHead">
+              <div class="take-head">
+                <p class="eyebrow warm" id="takeHead">Your take</p>
+                <span class="private-pill">🔒 Private to you</span>
+              </div>
+              <h3 class="take-title">How does this feel so far?</h3>
+              <p class="refl-sub">Anything you want to see more or less of, or a role that caught you off guard? This is just for you. Kindling listens, it doesn't grade.</p>
+
+              <form class="take-form" id="takeForm">
+                <label for="takeInput" class="sr-only">Your take</label>
+                <textarea id="takeInput" maxlength="1000" rows="4" placeholder="Tell Kindling what you noticed…"></textarea>
+                <div class="take-form-foot">
+                  <span class="take-counter" id="takeCounter">0/1000</span>
+                  <button type="submit" class="btn-gold sm" id="takeSave" disabled>Save note</button>
+                </div>
+              </form>
+
+              <div class="take-chips" id="takeChips" hidden></div>
+              <div class="take-notes" id="takeNotes"></div>
             </section>
           </div>
           <section class="refl-card refl-right" aria-labelledby="calHead">
@@ -322,6 +375,14 @@
             <p class="whisper refl-quote">"You're not meant to have it all figured out. You're meant to keep exploring."</p>
           </section>
         </div>
+
+        <footer class="page-foot-compact">
+          <a href="#about">About</a><span class="dot">·</span>
+          <a href="#privacy">Privacy</a><span class="dot">·</span>
+          <a href="#terms">Terms</a><span class="dot">·</span>
+          <a href="#settings">Settings</a><span class="dot">·</span>
+          <span>© 2026 Kindling</span>
+        </footer>
       </div>
     </section>
 
@@ -462,6 +523,214 @@
       </div>
     </section>
 
+    <!-- ============ ABOUT ============ -->
+    <section class="screen" id="about" aria-label="About Kindling">
+      <div class="legal-page">
+        <header class="legal-head">
+          <p class="eyebrow cool">About</p>
+          <h2 class="display">A space to get curious,<br>not a test to pass.</h2>
+          <p class="lede">Kindling helps you follow what catches your attention, and see where those questions could lead.</p>
+        </header>
+
+        <section class="legal-section">
+          <h3>What Kindling is</h3>
+          <p>Kindling is a place to explore what interests you, out loud, without being scored, graded, or sorted into a "type." There's no quiz to fail here, and no single right answer to find.</p>
+        </section>
+
+        <section class="legal-section">
+          <h3>How it works</h3>
+          <div class="step-cards">
+            <div class="step-card">
+              <p class="step-num">01</p>
+              <h4>Explore</h4>
+              <p>Chat with Kindling about anything you're curious about. No script, no wrong answers.</p>
+            </div>
+            <div class="step-card">
+              <p class="step-num">02</p>
+              <h4>Inference</h4>
+              <p>Kindling gently notices patterns in how you explore, never a label for who you are.</p>
+            </div>
+            <div class="step-card">
+              <p class="step-num">03</p>
+              <h4>Career Graph</h4>
+              <p>See real fields and careers connected to what you've been curious about, and where they could lead.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="legal-section">
+          <h3>What Kindling isn't</h3>
+          <ul>
+            <li>It isn't a personality test or a career-matching quiz with a final score.</li>
+            <li>It doesn't decide your future, or tell you who you "should" be.</li>
+            <li>It isn't a replacement for a real teacher, school counselor, or someone who actually knows you.</li>
+          </ul>
+        </section>
+
+        <section class="legal-section">
+          <h3>Where the career information comes from</h3>
+          <p>The fields, careers, and everyday tasks you see on the Career Graph come from O*NET, a free public database of U.S. occupations.</p>
+          <div class="legal-note">This product uses information from O*NET Web Services by the U.S. Department of Labor, Employment and Training Administration (USDOL/ETA). O*NET® is a trademark of USDOL/ETA. Learn more at <a href="https://www.onetcenter.org/" target="_blank" rel="noopener">onetcenter.org</a>.</div>
+        </section>
+
+        <section class="legal-section">
+          <h3>A note on accuracy</h3>
+          <p>Kindling's replies come from an AI, and AI can get things wrong or oversimplify. Use it to explore ideas, not as the final word. Before any big decision, like choosing a class, a major, or a path, talk it over with a real teacher, school counselor, or trusted adult.</p>
+        </section>
+      </div>
+
+      <footer class="site-footer">
+        <div class="site-footer-top">
+          <div class="site-footer-brand">
+            <svg width="13" height="13" aria-hidden="true"><use href="#spark"/></svg>
+            <strong>Kindling</strong>
+            <span class="site-footer-tagline">A space for curiosity, not a test.</span>
+          </div>
+          <ul class="site-footer-links">
+            <li><a href="#about">About</a></li>
+            <li><a href="#privacy">Privacy</a></li>
+            <li><a href="#terms">Terms</a></li>
+            <li><a href="#settings">Settings</a></li>
+          </ul>
+        </div>
+        <p class="site-footer-meta">© 2026 Kindling<br>Career data from O*NET® (<a href="https://www.onetcenter.org/" target="_blank" rel="noopener">onetcenter.org</a>), sponsored by the U.S. Dept. of Labor/ETA</p>
+      </footer>
+    </section>
+
+    <!-- ============ PRIVACY ============ -->
+    <section class="screen" id="privacy" aria-label="Privacy Policy">
+      <div class="legal-page">
+        <header class="legal-head">
+          <p class="eyebrow cool">LEGAL</p>
+          <h2 class="display">Privacy Policy</h2>
+          <p class="legal-updated">Last updated: <span data-legal-updated></span></p>
+          <p class="lede">This policy explains what information Kindling collects and how it's used.</p>
+        </header>
+
+        <section class="legal-section">
+          <h3>What we store</h3>
+          <ul>
+            <li>Your account email, and a securely scrambled (hashed) version of your password, never the password itself.</li>
+            <li>The messages you send Kindling, and Kindling's replies, so your conversation is still there when you come back.</li>
+            <li>Behavioral signals from how you explore, like the patterns Inference notices, which fields and careers you've opened on the Career Graph, and which patterns you've told Kindling feel right or don't.</li>
+          </ul>
+          <div class="legal-note"><strong>Worth knowing:</strong> the sign-up screen has a "what should we call you" field, but it isn't connected to anything yet, so nothing you type there is currently saved.</div>
+        </section>
+
+        <section class="legal-section">
+          <h3>Why we store it</h3>
+          <ul>
+            <li>To keep your conversations right where you left them.</li>
+            <li>To notice patterns across everything you've explored, not just one chat.</li>
+            <li>To make the Career Graph feel personal to your exploration, instead of generic.</li>
+          </ul>
+        </section>
+
+        <section class="legal-section">
+          <h3>Where it lives</h3>
+          <p>Everything above lives in Kindling's own database, on the server that runs the app. It isn't synced to any other storage service, aside from the AI providers below, which only ever see the text of one message at the moment they're generating a reply to it.</p>
+        </section>
+
+        <section class="legal-section">
+          <h3>Who can see it</h3>
+          <ul>
+            <li>You, whenever you're signed in and looking at your own exploration.</li>
+            <li>People on the Kindling team, for overall usage patterns and (only when needed to fix a real problem) the messages in a specific conversation. This is only ever to build and improve Kindling.</li>
+          </ul>
+          <p>We never sell your data, and we never share it with advertisers.</p>
+        </section>
+
+        <section class="legal-section">
+          <h3>The AI providers we use</h3>
+          <p>When you send Kindling a message, its text is sent to Groq and, if Groq is unavailable, to Google's Gemini, so one of them can write a reply. We can't independently verify what either provider does with that text beyond their own published policies, so it's best to avoid sharing anything in a chat that you wouldn't want a third-party AI service to process.</p>
+        </section>
+
+        <section class="legal-section">
+          <h3>Downloading or deleting your data</h3>
+          <p>There's no one-click "download everything" button yet. You can permanently delete your conversations, patterns, and Career Graph at any time from <a href="#settings">Settings → Reset exploration</a>, which really deletes it, not just hides it. Deleting your account entirely isn't self-serve yet either; email us at <a href="mailto:hello@kindling.app">hello@kindling.app</a> and we'll take care of it by hand.</p>
+        </section>
+
+        <section class="legal-section">
+          <h3>If you're under 13</h3>
+          <p>Please explore Kindling together with a parent or guardian.</p>
+        </section>
+      </div>
+
+      <footer class="site-footer">
+        <div class="site-footer-top">
+          <div class="site-footer-brand">
+            <svg width="13" height="13" aria-hidden="true"><use href="#spark"/></svg>
+            <strong>Kindling</strong>
+            <span class="site-footer-tagline">A space for curiosity, not a test.</span>
+          </div>
+          <ul class="site-footer-links">
+            <li><a href="#about">About</a></li>
+            <li><a href="#privacy">Privacy</a></li>
+            <li><a href="#terms">Terms</a></li>
+            <li><a href="#settings">Settings</a></li>
+          </ul>
+        </div>
+        <p class="site-footer-meta">© 2026 Kindling<br>Career data from O*NET® (<a href="https://www.onetcenter.org/" target="_blank" rel="noopener">onetcenter.org</a>), sponsored by the U.S. Dept. of Labor/ETA</p>
+      </footer>
+    </section>
+
+    <!-- ============ TERMS ============ -->
+    <section class="screen" id="terms" aria-label="Terms of Use">
+      <div class="legal-page">
+        <header class="legal-head">
+          <p class="eyebrow cool">LEGAL</p>
+          <h2 class="display">Terms of Use</h2>
+          <p class="legal-updated">Last updated: <span data-legal-updated></span></p>
+          <p class="lede">These terms explain how Kindling can be used and what it can and can't do for you.</p>
+        </header>
+
+        <section class="legal-section">
+          <h3>Using Kindling</h3>
+          <ul>
+            <li>Kindling is meant for personal, non-commercial exploring, not for automated use, scraping, or reselling what it shows you.</li>
+            <li>Be a decent person here: don't try to break, overload, or misuse Kindling, and don't use it to generate anything harmful.</li>
+          </ul>
+        </section>
+
+        <section class="legal-section">
+          <h3>About what Kindling tells you</h3>
+          <p>Kindling's replies, patterns, and career suggestions are generated by AI and by general career data (from O*NET); they're starting points for exploring, not professional, medical, legal, or financial advice.</p>
+          <p>AI can be wrong, outdated, or oversimplified. Always check anything important with a real teacher, school counselor, or trusted adult, especially before a decision that matters.</p>
+        </section>
+
+        <section class="legal-section">
+          <h3>Your account</h3>
+          <p>Keep your password to yourself; you're responsible for what happens in your account. You can reset your exploration or ask us to delete your account at any time. See the <a href="#privacy">Privacy Policy</a> for how.</p>
+        </section>
+
+        <section class="legal-section">
+          <h3>Changes</h3>
+          <p>Kindling is still actively being built, so these terms, and the app itself, may change over time. We'll try to keep this page current.</p>
+        </section>
+
+        <section class="legal-section">
+          <h3>Questions</h3>
+          <p>Reach us at <a href="mailto:hello@kindling.app">hello@kindling.app</a>.</p>
+        </section>
+      </div>
+
+      <footer class="site-footer">
+        <div class="site-footer-top">
+          <div class="site-footer-brand">
+            <svg width="13" height="13" aria-hidden="true"><use href="#spark"/></svg>
+            <strong>Kindling</strong>
+            <span class="site-footer-tagline">A space for curiosity, not a test.</span>
+          </div>
+          <ul class="site-footer-links">
+            <li><a href="#about">About</a></li>
+            <li><a href="#privacy">Privacy</a></li>
+            <li><a href="#terms">Terms</a></li>
+            <li><a href="#settings">Settings</a></li>
+          </ul>
+        </div>
+        <p class="site-footer-meta">© 2026 Kindling<br>Career data from O*NET® (<a href="https://www.onetcenter.org/" target="_blank" rel="noopener">onetcenter.org</a>), sponsored by the U.S. Dept. of Labor/ETA</p>
+      </footer>
+    </section>
   </main>
 
   <!-- ==================== MINIMAL FOOTER ==================== -->

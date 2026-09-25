@@ -38,22 +38,6 @@
         return `${h}h ${String(m).padStart(2, '0')}m`;
     }
 
-    function renderTimeline(items) {
-        const journeyEl = $('#journey');
-        const userMessages = items.filter(i => i.item_type === 'message' && i.detail === 'user');
-
-        if (userMessages.length === 0) {
-            journeyEl.innerHTML = '<li class="j-card">Nothing here yet. Your questions will build a timeline as you explore.</li>';
-            return;
-        }
-
-        journeyEl.innerHTML = userMessages.map((item, i) => `
-      <li class="j-card${i === userMessages.length - 1 ? ' is-now' : ''}">
-        <time>${esc(formatWhen(item.timestamp))}</time>
-        <span>${esc(item.data)}</span>
-      </li>`).join('');
-    }
-
     /*
      * Real dwell time on Career Graph nodes, logged by
      * career-graph.js through the existing POST /api/events/log
@@ -77,9 +61,15 @@
                 catch (error) {}
             });
 
+        /*
+         * Filtering on r.ms > 0 alone let a real-but-tiny duration
+         * (a few seconds) through, which formatDuration() then
+         * rounds down to "0h 00m" — a row that looks broken instead
+         * of informative. Hide anything that would display as zero.
+         */
         const rows = K.patterns
             .map(p => ({ pattern: p, ms: totals[p.key] || 0 }))
-            .filter(r => r.ms > 0)
+            .filter(r => Math.round(r.ms / 60000) > 0)
             .sort((a, b) => b.ms - a.ms);
 
         if (rows.length === 0) {
@@ -117,14 +107,12 @@
         }));
     }
 
-    async function loadTimeline() {
+    async function loadTimeSpent() {
 
-        const journeyEl = $('#journey');
         const timeBarsEl = $('#timeBars');
         const sessionId = K.getSessionId();
 
         if (!sessionId) {
-            journeyEl.innerHTML = '<li class="j-card">Start exploring on Explore to build your timeline.</li>';
             timeBarsEl.innerHTML = '<li class="time-bars-empty">Time you spend exploring will show up here.</li>';
             return;
         }
@@ -136,16 +124,12 @@
             if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
             const data = await response.json();
-            const items = data.timeline || [];
-
-            renderTimeline(items);
-            renderTimeSpent(items);
+            renderTimeSpent(data.timeline || []);
 
         }
 
         catch (error) {
-            console.error('Failed to load timeline:', error);
-            journeyEl.innerHTML = '<li class="j-card">We could not reach the server. Please try again.</li>';
+            console.error('Failed to load time spent:', error);
             timeBarsEl.innerHTML = '<li class="time-bars-empty">We could not reach the server. Please try again.</li>';
         }
 
@@ -172,9 +156,164 @@
 
     K.onFeelingChange.push(renderCalibration);
 
+    /* =====================================================
+       "YOUR TAKE" — real reflection notes
+       POST /api/reflection/note (real strict-JSON-schema LLM
+       extraction, resolved against the student's real current
+       Career Graph and applied server-side), GET /api/reflection/
+       notes, DELETE .../preference/{id} and .../note/{id}. Chips
+       are the flat, live set of every active preference across
+       every saved note; the list below is the raw notes with
+       their own per-note delete.
+       ===================================================== */
+
+    const TAKE_KIND_PREFIX = {
+        hide_field: 'Hiding',
+        focus_field: 'Focusing on',
+        pattern_adjust: "Doesn't fit",
+        new_to_them: 'Discovered',
+    };
+
+    const takeInput = $('#takeInput'), takeCounter = $('#takeCounter'), takeSave = $('#takeSave'), takeForm = $('#takeForm');
+    const takeChipsEl = $('#takeChips'), takeNotesEl = $('#takeNotes');
+
+    function flattenChips(notes) {
+        const chips = [];
+        notes.forEach(note => (note.preferences || []).forEach(pref => chips.push(pref)));
+        return chips;
+    }
+
+    function renderTakeChips(notes) {
+        const chips = flattenChips(notes);
+        if (!chips.length) { takeChipsEl.hidden = true; takeChipsEl.innerHTML = ''; return; }
+        takeChipsEl.hidden = false;
+        takeChipsEl.innerHTML = chips.map(c => `
+      <span class="take-chip" data-pref-id="${c.id}">
+        ${esc(TAKE_KIND_PREFIX[c.kind] || c.kind)}: ${esc(c.label)}
+        <button type="button" aria-label="Undo ${esc(TAKE_KIND_PREFIX[c.kind] || c.kind)}: ${esc(c.label)}">
+          <svg width="9" height="9" viewBox="0 0 9 9" aria-hidden="true"><path d="M1 1l7 7M8 1 1 8" stroke="currentColor" stroke-width="1.3"/></svg>
+        </button>
+      </span>`).join('');
+    }
+
+    function renderTakeNotes(notes) {
+        if (!notes.length) {
+            takeNotesEl.innerHTML = '<p class="take-notes-empty">Notes you save will show up here.</p>';
+            return;
+        }
+        takeNotesEl.innerHTML = notes.map(n => `
+      <div class="take-note-row" data-note-id="${n.id}">
+        <div class="take-note-row-head">
+          <p class="take-note-text">${esc(n.note_text)}</p>
+          <span class="take-note-date">${esc(formatWhen(n.created_at))}</span>
+        </div>
+        <button type="button" class="take-note-delete" data-delete-note="${n.id}">Delete</button>
+      </div>`).join('');
+    }
+
+    async function loadTakeNotes() {
+        const token = K.getAuthToken();
+        if (!token) { renderTakeChips([]); renderTakeNotes([]); return; }
+
+        try {
+            const response = await fetch(`${K.API_BASE_URL}/api/reflection/notes?token=${encodeURIComponent(token)}`);
+            if (!response.ok) throw new Error(`Server returned ${response.status}`);
+            const data = await response.json();
+            const notes = data.notes || [];
+            renderTakeChips(notes);
+            renderTakeNotes(notes);
+        }
+        catch (error) {
+            console.error('Failed to load reflection notes:', error);
+        }
+    }
+
+    if (takeInput) {
+        takeInput.addEventListener('input', () => {
+            const len = takeInput.value.length;
+            takeCounter.textContent = `${len}/1000`;
+            takeCounter.classList.toggle('is-near-limit', len > 900);
+            takeSave.disabled = !takeInput.value.trim();
+        });
+
+        takeForm.addEventListener('submit', async e => {
+            e.preventDefault();
+            const noteText = takeInput.value.trim();
+            if (!noteText) return;
+
+            const token = K.getAuthToken();
+            const sessionId = K.getSessionId();
+            if (!token) { K.toast('Sign in to save your take.'); return; }
+            if (!sessionId) { K.toast("Start exploring first. There's nothing to reflect on yet."); return; }
+
+            takeSave.disabled = true;
+            const originalLabel = takeSave.textContent;
+            takeSave.textContent = 'Saving…';
+
+            try {
+                const response = await fetch(`${K.API_BASE_URL}/api/reflection/note`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, session_id: sessionId, note_text: noteText })
+                });
+                if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+                takeInput.value = '';
+                takeCounter.textContent = '0/1000';
+                await loadTakeNotes();
+                K.toast('Noted. Kindling adjusted what it shows you.');
+            }
+            catch (error) {
+                console.error('Failed to save reflection note:', error);
+                K.toast("We couldn't save that. Please try again.");
+            }
+            finally {
+                takeSave.textContent = originalLabel;
+                takeSave.disabled = !takeInput.value.trim();
+            }
+        });
+
+        takeChipsEl.addEventListener('click', async e => {
+            const chipEl = e.target.closest('.take-chip');
+            if (!chipEl) return;
+            const token = K.getAuthToken();
+            if (!token) return;
+
+            try {
+                const response = await fetch(`${K.API_BASE_URL}/api/reflection/preference/${chipEl.dataset.prefId}?token=${encodeURIComponent(token)}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error(`Server returned ${response.status}`);
+                await loadTakeNotes();
+                K.toast('Undone.');
+            }
+            catch (error) {
+                console.error('Failed to undo preference:', error);
+                K.toast("We couldn't undo that. Please try again.");
+            }
+        });
+
+        takeNotesEl.addEventListener('click', async e => {
+            const btn = e.target.closest('[data-delete-note]');
+            if (!btn) return;
+            const token = K.getAuthToken();
+            if (!token) return;
+
+            try {
+                const response = await fetch(`${K.API_BASE_URL}/api/reflection/note/${btn.dataset.deleteNote}?token=${encodeURIComponent(token)}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error(`Server returned ${response.status}`);
+                await loadTakeNotes();
+                K.toast('Note deleted.');
+            }
+            catch (error) {
+                console.error('Failed to delete note:', error);
+                K.toast("We couldn't delete that. Please try again.");
+            }
+        });
+    }
+
     K.onRoute.reflection = () => {
-        loadTimeline();
+        loadTimeSpent();
         renderCalibration();
+        loadTakeNotes();
         requestAnimationFrame(() => $('#reflection').classList.add('is-shown'));
     };
 

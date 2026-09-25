@@ -102,8 +102,25 @@
         K.startSky();
     });
 
-    toggle($('#labelsSwitch'), false, on => {
+    /*
+     * No backend settings storage exists for this (or any other)
+     * preference — every other toggle here (theme, text size, save-
+     * my-exploration) is localStorage-only too, so this matches the
+     * established pattern rather than inventing a new one.
+     */
+    const LABELS_ALL_KEY = 'kindling_labels_all';
+    let labelsAllOn = false;
+    try { labelsAllOn = localStorage.getItem(LABELS_ALL_KEY) === 'true'; } catch (error) {}
+
+    // #graphMap is never recreated (career-graph.js only rebuilds
+    // its inner <g>), so this class applies immediately to whatever
+    // is on the map right now — no re-render needed, and it survives
+    // later re-renders since it lives on the stable outer element.
+    $('#graphMap').classList.toggle('labels-all', labelsAllOn);
+
+    toggle($('#labelsSwitch'), labelsAllOn, on => {
         $('#graphMap').classList.toggle('labels-all', on);
+        try { localStorage.setItem(LABELS_ALL_KEY, on ? 'true' : 'false'); } catch (error) {}
     });
 
     /* ---- reset ---- */

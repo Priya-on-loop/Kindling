@@ -1,7 +1,15 @@
 /* =========================================================
    1. LANDING
    ========================================================= */
-#home { padding: 0; overflow: hidden; }
+/* overflow was hidden (hero fills the screen exactly) — now that a
+   footer sits below the hero, the screen needs to scroll to reach
+   it. Only Landing/About/Privacy/Terms are allowed page-level
+   scroll; Inference/Career Graph/Reflection use .page-foot-compact
+   instead, sized to fit inside their existing no-scroll layout. */
+#home { padding: 0; overflow-y: auto; }
+/* Display screen, not reading content - selecting it (drag, triple-
+   click, Ctrl+A) has no real use and just looks like a UI glitch. */
+#home .hero { user-select: none; -webkit-user-select: none; }
 .hero { position: relative; height: 100%; min-height: 560px; display: flex; flex-direction: column; justify-content: center; padding: 0 var(--pad-x) clamp(56px, 12vh, 140px); }
 .hero-copy { position: relative; z-index: 2; max-width: 560px; }
 .hero-title { font-family: var(--font-display); font-weight: 400; font-size: clamp(52px, 6.6vw, 92px); line-height: 0.98; letter-spacing: -1px; margin-bottom: 28px; }
@@ -177,6 +185,16 @@
 .k-mark svg { width: 13px; height: 13px; filter: drop-shadow(0 0 5px rgba(245,196,106,0.7)); }
 .k-body { padding: 13px 17px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); font-size: 14.5px; line-height: 1.75; }
 .k-body p + p { margin-top: 8px; }
+.k-body ul, .k-body ol { margin: 8px 0 0; padding-left: 1.3em; }
+.k-body ul + p, .k-body ol + p, .k-body p + ul, .k-body p + ol { margin-top: 8px; }
+.k-body li + li { margin-top: 3px; }
+.k-body strong { font-weight: 600; color: var(--fg); }
+.k-body em { font-style: italic; }
+.k-body code {
+  font-family: var(--font-mono, monospace); font-size: 0.92em;
+  background: var(--surface-elevated); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px;
+}
 .typing { display: inline-flex; gap: 5px; padding: 4px 0; }
 .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite ease-in-out; }
 .typing i:nth-child(2) { animation-delay: 0.15s; }
@@ -307,6 +325,7 @@
 /* =========================================================
    4. CAREER GRAPH — bird's-eye graph left, explore panel right
    ========================================================= */
+.graph-page { height: 100%; min-height: 460px; display: flex; flex-direction: column; }
 .graph-frame {
   position: relative; flex: 1; min-height: 0;
   border-radius: var(--radius-panel);
@@ -319,7 +338,8 @@
 #graphMap .node.field text { font-size: 15px; opacity: 0.55; }
 #graphMap .node.career text { font-size: 12.5px; opacity: 0.7; }
 #graphMap.labels-all .node.area text,
-#graphMap.labels-all .node.field text { opacity: 1; }
+#graphMap.labels-all .node.field text,
+#graphMap.labels-all .node.career text { opacity: 1; }
 #graphMap .node.hub text { font-size: 20px; font-weight: 500; }
 
 /* Obsidian-style focus: hovering or selecting dims everything outside the neighborhood */
@@ -497,6 +517,50 @@ body.signed-in .only-out, body:not(.signed-in) .only-in { display: none; }
 .history-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 14px; }
 .refl-quote { margin-top: auto; padding-top: 14px; font-size: 15px; }
 
+/* "Your take" — Reflection's own real note card, replacing the raw
+   message-dump "Exploration timeline". */
+.eyebrow.warm::before { background: var(--warm); box-shadow: 0 0 8px var(--warm); }
+.take-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.take-head .eyebrow { margin-bottom: 0; }
+.private-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: var(--radius-pill);
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 11px; color: var(--muted); white-space: nowrap;
+}
+.take-title { font-family: var(--font-display); font-weight: 500; font-size: 19px; margin: 10px 0 6px; color: var(--fg); }
+.take-form { margin-top: 14px; }
+.take-form textarea {
+  width: 100%; resize: vertical; min-height: 84px; max-height: 220px;
+  padding: 12px 14px; border-radius: var(--radius-card);
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--fg); font: inherit; font-size: 13.5px; line-height: 1.6;
+}
+.take-form textarea::placeholder { color: var(--faint); }
+.take-form-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.take-counter { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.take-counter.is-near-limit { color: var(--amber); }
+.take-form .btn-gold:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+
+.take-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.take-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 7px 6px 13px; border-radius: var(--radius-pill);
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 12.5px; color: var(--fg);
+}
+.take-chip button { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
+.take-chip button:hover { color: var(--fg); background: var(--surface-elevated); }
+
+.take-notes { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+.take-notes-empty { font-size: 13px; color: var(--muted); }
+.take-note-row { padding: 12px 14px; border-radius: var(--radius-card); background: var(--surface); border: 1px solid var(--border); }
+.take-note-row-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.take-note-text { font-size: 13px; color: var(--muted); line-height: 1.6; flex: 1; }
+.take-note-date { font-size: 11px; color: var(--faint); white-space: nowrap; flex: none; margin-top: 2px; }
+.take-note-delete { margin-top: 8px; font-size: 11.5px; color: var(--faint); }
+.take-note-delete:hover { color: var(--danger); }
+
 /* =========================================================
    6. SETTINGS — professional two-pane
    ========================================================= */
@@ -569,16 +633,83 @@ dialog .field { margin-bottom: 20px; }
 .toast-undo { flex: none; color: var(--warm-soft); font-size: 13px; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 
 /* =========================================================
+   FOOTERS
+   Full footer: Landing, About, Privacy, Terms — pages that
+   already scroll, so extra height at the bottom is free.
+   Compact footer: Inference, Career Graph, Reflection — single-
+   screen pages with no page-level scroll, so this stays one
+   thin row that their existing flex layouts shrink around.
+   ========================================================= */
+.site-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 48px;
+  padding: 22px var(--pad-x) 28px;
+  font-size: 12.5px; color: var(--muted);
+}
+.site-footer-top {
+  display: flex; flex-wrap: wrap; gap: 16px 28px;
+  align-items: center; justify-content: space-between;
+}
+.site-footer-brand { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.site-footer-brand svg { width: 13px; height: 13px; color: var(--warm); filter: drop-shadow(var(--glow-warm)); }
+.site-footer-brand strong { font-family: var(--font-display); font-size: 15px; font-weight: 500; color: var(--fg); }
+.site-footer-tagline { color: var(--faint); }
+.site-footer-links { display: flex; gap: 18px; flex-wrap: wrap; list-style: none; }
+.site-footer-links a:hover { color: var(--fg); }
+/* Copyright/attribution sits on its own line below the brand+links
+   row, not inline beside the links. */
+.site-footer-meta { margin-top: 14px; text-align: right; color: var(--faint); line-height: 1.6; }
+.site-footer-meta a { color: var(--muted); }
+.site-footer-meta a:hover { color: var(--fg); }
+
+.page-foot-compact {
+  flex: none;
+  border-top: 1px solid var(--border);
+  margin-top: 14px; padding-top: 10px;
+  display: flex; flex-wrap: wrap; gap: 6px 14px;
+  align-items: center; justify-content: center;
+  font-size: 11.5px; color: var(--faint);
+}
+.page-foot-compact a { color: var(--muted); }
+.page-foot-compact a:hover { color: var(--fg); }
+.page-foot-compact .dot { opacity: 0.5; }
+
+/* =========================================================
+   ABOUT / PRIVACY / TERMS
+   ========================================================= */
+.legal-page { max-width: 860px; margin: 0 auto; }
+.legal-head { margin: 8px 0 32px; }
+.legal-head .display { font-size: clamp(32px, 3.2vw, 46px); margin-bottom: 8px; }
+.legal-updated { font-size: 12.5px; color: var(--faint); margin-bottom: 10px; }
+.legal-section { margin-bottom: 34px; }
+.legal-section h3 { font-family: var(--font-display); font-weight: 500; font-size: 21px; margin-bottom: 10px; color: var(--fg); }
+.legal-section p { font-size: 14px; line-height: 1.75; color: var(--muted); margin-bottom: 10px; }
+.legal-section p:last-child { margin-bottom: 0; }
+.legal-section ul { list-style: none; display: grid; gap: 9px; margin-bottom: 10px; }
+.legal-section li { font-size: 14px; line-height: 1.65; color: var(--muted); padding-left: 17px; position: relative; }
+.legal-section li::before { content: ''; position: absolute; left: 0; top: 9px; width: 5px; height: 5px; border-radius: 50%; background: var(--violet); }
+.legal-note { padding: 14px 18px; border-radius: var(--radius-card); background: var(--surface); border: 1px solid var(--border); font-size: 13px; line-height: 1.7; color: var(--muted); }
+.legal-note strong { color: var(--fg); }
+.legal-note a { color: var(--cool); }
+.legal-note a:hover { text-decoration: underline; }
+
+.step-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.step-card { padding: 18px 20px; border-radius: var(--radius-card); background: var(--surface); border: 1px solid var(--border); }
+.step-card .step-num { font-family: var(--font-display); font-size: 24px; color: var(--warm); margin-bottom: 6px; }
+.step-card h4 { font-size: 15px; font-weight: 500; margin-bottom: 6px; color: var(--fg); }
+.step-card p { font-size: 13px; color: var(--muted); line-height: 1.6; margin: 0; }
+
+/* =========================================================
    RESPONSIVE
    ========================================================= */
 @media (max-width: 1080px) {
-  .inf-page, .refl-page { height: auto; }
+  .inf-page, .refl-page, .graph-page { height: auto; }
   .refl-grid { grid-template-columns: 1fr; }
   .refl-left, .refl-right { overflow: visible; }
   .inf-grid { grid-template-columns: 1fr; }
   .inf-card { height: 70vh; min-height: 420px; }
   .inf-side { overflow: visible; }
-  .map-layout { grid-template-columns: 1fr; height: auto; }
+  .map-layout { grid-template-columns: 1fr; flex: none; height: auto; }
   .map-pane { height: 62vh; min-height: 380px; }
   .info-pane { overflow: visible; }
   .hero-scene { width: 100vw; opacity: 0.55; }
@@ -623,6 +754,11 @@ dialog .field { margin-bottom: 20px; }
   .refl-card { padding: 18px 18px; }
   .time-row { grid-template-columns: 1fr; row-gap: 6px; }
   .time-row-value { justify-self: end; }
+  .site-footer { text-align: center; padding-left: 20px; padding-right: 20px; }
+  .site-footer-top { flex-direction: column; align-items: center; text-align: center; }
+  .site-footer-meta { text-align: center; }
+  .step-cards { grid-template-columns: 1fr; }
+  .legal-head .display { font-size: clamp(28px, 8vw, 38px); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
