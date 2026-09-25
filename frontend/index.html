@@ -217,15 +217,15 @@
         </header>
 
         <div class="inf-grid">
-          <div class="inf-card">
-            <svg id="inferenceMap" class="star-map" viewBox="30 20 580 490" role="group" aria-label="Patterns noticed in your exploration"></svg>
-            <div class="inf-foot" id="infFoot" aria-live="polite"></div>
-          </div>
-
           <div class="inf-side">
             <div class="note-card glass">These are patterns in how you explore, never labels for who you are. They may shift as you keep going.</div>
             <p class="section-label">What we're noticing</p>
             <ul class="evidence-list" id="evidenceList"></ul>
+          </div>
+
+          <div class="inf-card">
+            <svg id="inferenceMap" class="star-map" viewBox="30 20 580 490" role="group" aria-label="Patterns noticed in your exploration"></svg>
+            <div class="inf-foot" id="infFoot" aria-live="polite"></div>
           </div>
         </div>
         
@@ -242,7 +242,8 @@
 
     <!-- ============ 4. CAREER GRAPH ============ -->
     <section class="screen" id="graph" aria-label="Career Graph">
-      <div class="map-layout">
+      <div class="map-layout" id="graphLayout">
+        <aside class="info-pane" id="graphPanel" aria-live="polite" aria-label="Explore a direction"></aside>
         <div class="map-pane">
           <div class="graph-frame" id="graphFrame">
             <svg id="graphMap" role="group" aria-label="Map of fields and careers connected to your exploration">
@@ -255,12 +256,12 @@
             <div class="graph-tools">
               <button class="icon-btn" id="zoomIn" aria-label="Zoom in"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg></button>
               <button class="icon-btn" id="zoomOut" aria-label="Zoom out"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg></button>
-              <button class="icon-btn" id="zoomFit" aria-label="Fit whole map"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>
+              <button class="icon-btn" id="zoomFit" aria-label="Fit whole map"><svg width="12" height="12" viewBox="0 0 14 14"><path d="M5 1H1v4M9 1h4v4M5 13H1V9M9 13h4V9" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>
+              <button class="icon-btn" id="graphFullscreen" aria-label="Enter fullscreen" aria-pressed="false" hidden><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>
               <span>Drag, scroll to zoom</span>
             </div>
           </div>
         </div>
-        <aside class="info-pane" id="graphPanel" aria-live="polite" aria-label="Explore a direction"></aside>
       </div>
 
       <!-- Gokul's Compact Footer -->

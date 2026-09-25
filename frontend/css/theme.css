@@ -210,7 +210,9 @@ body[data-page="auth"] .nav-signin, body[data-page="auth"] .pill-outline { displ
 .screen::-webkit-scrollbar-track { background: transparent; }
 .screen.is-active { opacity: 1; visibility: visible; transition: opacity 0.45s ease, visibility 0s; }
 
-/* Map-left / info-right pages share this frame */
+/* Info-left / map-right - same frame, positions swapped. Column
+   sizes stay the same as before the swap (340px-min text column,
+   1.35fr graph column), just in the other order. */
 .map-layout {
   /* Flex child of .graph-page (screens.css) now, not the screen's
      only content — flex:1/min-height:0 lets the compact footer take
@@ -218,7 +220,7 @@ body[data-page="auth"] .nav-signin, body[data-page="auth"] .pill-outline { displ
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(340px, 1fr);
+  grid-template-columns: minmax(340px, 1fr) minmax(0, 1.35fr);
   gap: clamp(20px, 3vw, 44px);
 }
 .map-pane { position: relative; min-height: 0; display: flex; flex-direction: column; justify-content: center; }

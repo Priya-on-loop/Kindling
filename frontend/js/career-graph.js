@@ -562,6 +562,43 @@
     const fitK = () => (frame.clientWidth && frame.clientWidth < 600 ? 1.3 : 1);
     $('#zoomFit').addEventListener('click', () => { view = { x: 0, y: 0, k: fitK() }; applyView(); });
 
+    // ── Fullscreen ───────────────────────────────────────────
+    // Fullscreens #graphLayout (not just the tree) so the starfield
+    // canvas, reparented into it for the duration, keeps drifting
+    // behind the tree instead of vanishing outside the fullscreened
+    // subtree. Restored to its original spot on exit either way -
+    // button, Escape, or browser chrome all fire fullscreenchange.
+    const fsBtn = $('#graphFullscreen'), graphLayout = $('#graphLayout');
+    const sky = document.getElementById('sky'), nebula = $('.nebula');
+    const requestFs = el => (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+    const exitFs = () => (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+    const fsSupported = !!(graphLayout.requestFullscreen || graphLayout.webkitRequestFullscreen);
+
+    if (fsBtn) {
+        fsBtn.hidden = !fsSupported;
+        if (fsSupported) {
+            fsBtn.addEventListener('click', () => {
+                if (fsElement() === graphLayout) exitFs(); else requestFs(graphLayout);
+            });
+            const syncFullscreenState = () => {
+                const active = fsElement() === graphLayout;
+                graphLayout.classList.toggle('is-fullscreen', active);
+                fsBtn.setAttribute('aria-pressed', String(active));
+                fsBtn.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
+                if (active) {
+                    if (sky) graphLayout.insertBefore(sky, graphLayout.firstChild);
+                    if (nebula) graphLayout.insertBefore(nebula, graphLayout.firstChild);
+                } else {
+                    if (sky) document.body.insertBefore(sky, document.body.firstChild);
+                    if (nebula) document.body.insertBefore(nebula, document.body.firstChild);
+                }
+            };
+            document.addEventListener('fullscreenchange', syncFullscreenState);
+            document.addEventListener('webkitfullscreenchange', syncFullscreenState);
+        }
+    }
+
     let drag = null, dragMoved = false;
     frame.addEventListener('pointerdown', e => { if (e.target.closest('.graph-tools, .graph-filter')) return; drag = { sx: e.clientX, sy: e.clientY, ox: view.x, oy: view.y }; dragMoved = false; });
     addEventListener('pointermove', e => {
