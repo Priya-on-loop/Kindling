@@ -16,14 +16,26 @@
 .hero-title em { font-style: normal; color: var(--warm); text-shadow: 0 0 30px rgba(245, 196, 106, 0.35); }
 .hero-body { max-width: 40ch; font-size: 16px; line-height: 1.7; color: var(--muted); margin-bottom: 36px; }
 .hero-body strong { color: var(--fg); font-weight: 500; }
-.hero-scene { position: absolute; z-index: 1; right: 0; bottom: 0; width: min(68vw, 1000px); height: 100%; pointer-events: none; }
+.hero-scene {
+  position: absolute; z-index: 1; right: 0; bottom: 0; width: min(68vw, 1000px); height: 100%; pointer-events: none;
+  /* Soft fade over the last 120px so the artwork blends into the
+     starfield instead of ending in a hard edge above the footer. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 120px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 120px), transparent 100%);
+}
 .hero-scene svg { width: 100%; height: 100%; display: block; }
 .journey { position: absolute; z-index: 2; right: calc(var(--pad-x) + 2%); top: 38%; list-style: none; font-size: 13.5px; line-height: 2; color: var(--muted); }
 .journey li:last-child { color: var(--fg); display: flex; align-items: center; gap: 8px; }
 .journey li:last-child::after { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--warm); box-shadow: var(--glow-warm); }
 .hero-foot { position: absolute; z-index: 2; left: var(--pad-x); right: var(--pad-x); bottom: clamp(40px, 7vh, 76px); display: flex; justify-content: space-between; align-items: flex-end; font-size: 13px; color: var(--muted); }
-.scroll-cue { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12.5px; }
-.scroll-cue span { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-strong); display: grid; place-items: center; }
+/* A real link to #explore, styled as a call-to-action rather than a
+   "scroll for more" hint - the page has no content below the fold
+   past the footer, so the icon points right (to the next real
+   screen), not down. */
+.scroll-cue { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; transition: color 0.2s; }
+.scroll-cue:hover { color: var(--fg); }
+.scroll-cue span { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-strong); display: grid; place-items: center; transition: border-color 0.2s, background 0.2s; }
+.scroll-cue:hover span { border-color: var(--warm); background: rgba(245, 196, 106, 0.08); }
 
 /* =========================================================
    2. EXPLORE — pure chat
@@ -656,9 +668,10 @@ dialog .field { margin-bottom: 20px; }
 .site-footer-tagline { color: var(--faint); }
 .site-footer-links { display: flex; gap: 18px; flex-wrap: wrap; list-style: none; }
 .site-footer-links a:hover { color: var(--fg); }
-/* Copyright/attribution sits on its own line below the brand+links
-   row, not inline beside the links. */
-.site-footer-meta { margin-top: 14px; text-align: right; color: var(--faint); line-height: 1.6; }
+.site-footer-divider { height: 1px; background: var(--border); margin: 16px 0 14px; }
+/* Row 2: copyright (left) and the O*NET attribution the license
+   requires (right) - never combined inline with the links row. */
+.site-footer-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 20px; font-size: 11.5px; color: var(--faint); line-height: 1.6; }
 .site-footer-meta a { color: var(--muted); }
 .site-footer-meta a:hover { color: var(--fg); }
 
@@ -756,7 +769,7 @@ dialog .field { margin-bottom: 20px; }
   .time-row-value { justify-self: end; }
   .site-footer { text-align: center; padding-left: 20px; padding-right: 20px; }
   .site-footer-top { flex-direction: column; align-items: center; text-align: center; }
-  .site-footer-meta { text-align: center; }
+  .site-footer-meta { flex-direction: column; align-items: center; text-align: center; }
   .step-cards { grid-template-columns: 1fr; }
   .legal-head .display { font-size: clamp(28px, 8vw, 38px); }
 }

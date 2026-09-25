@@ -110,6 +110,17 @@ body[data-page="settings"] .nebula { opacity: calc(var(--sky-opacity) * 0.35); }
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 24px;
+  position: relative; z-index: 10;
+  background: transparent; border-bottom: 1px solid transparent;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+/* Transparent at the very top; once the active screen's own scroll
+   moves content under it, this stops anything ever visibly slicing
+   behind the logo/nav links. */
+.nav.is-scrolled {
+  background: var(--panel);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-bottom-color: var(--border);
 }
 .brand {
   justify-self: start;
