@@ -38,6 +38,7 @@
     const aName = $('#aName'), aEmail = $('#aEmail'), aPass = $('#aPass');
     const authSubmit = $('#authSubmit'), authSubmitLabel = $('#authSubmitLabel'), authSpinner = $('#authSpinner');
     const authSwitch = $('#authSwitch');
+    const authForgot = $('#authForgot');
     const authFine = $('#authFine'), authConsent = $('#authConsent');
     const googleBtn = $('#googleBtn');
 
@@ -49,8 +50,10 @@
 
     function setLoading(loading) {
         authSubmit.disabled = loading;
-        authSubmitLabel.hidden = loading;
         authSpinner.hidden = !loading;
+        authSubmitLabel.textContent = loading
+            ? (authMode === 'signup' ? 'Creating account…' : 'Logging in…')
+            : (authMode === 'signup' ? 'Create account' : 'Log in');
     }
 
     /*
@@ -77,6 +80,7 @@
             : 'Log in to pick up where you left off.';
         nameField.hidden = !isSignup;
         pwHint.hidden = !isSignup;
+        authForgot.hidden = isSignup;
         aPass.autocomplete = isSignup ? 'new-password' : 'current-password';
         authSubmitLabel.textContent = isSignup ? 'Create account' : 'Log in';
         authSwitch.innerHTML = isSignup
@@ -233,14 +237,21 @@
 
             if (!response.ok) {
 
-                if (authMode === 'login') {
-                    // Generic on purpose - the backend itself never
-                    // reveals whether the email or the password was
-                    // wrong, and neither should this message.
-                    authErr.innerHTML = `We couldn't log you in. Check your email and password — or <a href="#auth/signup">sign up</a> if you're new here`;
+                // Specific per-case text, always as plain text (never
+                // a link) - the "Sign up"/"Log in" link already below
+                // the button covers that, so the error never shows a
+                // second, duplicate one.
+                if (response.status === 429) {
+                    authErr.textContent = data.detail || 'Too many attempts, try again in a few minutes.';
+                }
+                else if (response.status === 404) {
+                    authErr.textContent = data.detail || "No account found with this email. Want to sign up?";
+                }
+                else if (response.status === 401) {
+                    authErr.textContent = data.detail || "That password isn't right. Try again or reset it.";
                 }
                 else if (response.status === 409) {
-                    authErr.innerHTML = `You already have an account with this email. <a href="#auth/login">Log in instead?</a>`;
+                    authErr.textContent = data.detail || "You already have an account with this email. Log in instead?";
                 }
                 else {
                     authErr.textContent = data.detail || 'Something went wrong. Please try again.';
@@ -284,9 +295,87 @@
 
     });
 
-    googleBtn.addEventListener('click', () => {
-        authErr.textContent = "Signing in with Google isn't available yet.";
+    // Set to a real OAuth Client ID from Google Cloud Console once
+    // one exists (see the deployment notes for the exact steps).
+    // Left blank, the button below honestly says so instead of
+    // half-working.
+    const GOOGLE_CLIENT_ID = '';
+
+    let googleScriptLoaded = false, googleInitialized = false;
+
+    function loadGoogleScript() {
+        if (googleScriptLoaded) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.onload = () => { googleScriptLoaded = true; resolve(); };
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+
+    async function handleGoogleCredential(credentialResponse) {
+        setLoading(true);
+        clearErrors();
+        try {
+            const response = await fetch(`${K.API_BASE_URL}/api/auth/google`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_token: credentialResponse.credential })
+            });
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                authErr.textContent = data.detail || "Couldn't sign in with Google. Please try again.";
+                return;
+            }
+
+            K.setAuth(data.token, data.email, data.name);
+            applySignedInUI();
+            toast(`Welcome, ${data.name}`);
+
+            let redirect = 'explore';
+            try {
+                const remembered = sessionStorage.getItem('kindling_redirect_after_login');
+                sessionStorage.removeItem('kindling_redirect_after_login');
+                if (remembered) redirect = remembered;
+            } catch (error) {}
+            location.hash = redirect;
+        }
+        catch (error) {
+            authErr.textContent = 'Something went wrong on our side. Please try again.';
+        }
+        finally {
+            setLoading(false);
+        }
+    }
+
+    googleBtn.addEventListener('click', async () => {
+        if (!GOOGLE_CLIENT_ID) {
+            authErr.textContent = "Signing in with Google isn't available yet.";
+            return;
+        }
+        try {
+            await loadGoogleScript();
+            if (!googleInitialized) {
+                window.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleGoogleCredential });
+                googleInitialized = true;
+            }
+            window.google.accounts.id.prompt();
+        }
+        catch (error) {
+            authErr.textContent = "Couldn't load Google sign-in. Please try again.";
+        }
     });
+
+    const forgotPasswordLink = $('#forgotPasswordLink');
+    if (forgotPasswordLink) {
+        forgotPasswordLink.addEventListener('click', e => {
+            e.preventDefault();
+            clearErrors();
+            authErr.textContent = "Password reset isn't available yet.";
+        });
+    }
 
     applySignedInUI();
 

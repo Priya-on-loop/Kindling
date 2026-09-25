@@ -4,7 +4,11 @@ Phase 1: 7-Turn Structured Intake & Scoring
 Phase 2: Open Exploration & Mentorship (No Scoring Impact)
 """
 
+import os
 import sys
+import time
+import secrets
+from collections import defaultdict
 from pathlib import Path
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -19,7 +23,7 @@ sys.path.append(str(ROOT_DIR / "Scripts"))
 load_dotenv(ROOT_DIR / ".env")
 
 import bcrypt
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -294,6 +298,35 @@ class AuthResponse(BaseModel):
 
 MIN_PASSWORD_LENGTH = 8
 
+# In-memory sliding-window rate limit for login attempts, keyed
+# separately by IP and by email so an attacker can't dodge the limit
+# just by rotating one of the two. Resets on a server restart - fine
+# at this scale (single Render instance), not meant to survive that.
+RATE_LIMIT_WINDOW_SECONDS = 15 * 60
+RATE_LIMIT_MAX_ATTEMPTS = 5
+_login_attempts: Dict[str, List[float]] = defaultdict(list)
+
+
+def _check_rate_limit(key: str) -> None:
+    now = time.time()
+    attempts = _login_attempts[key]
+    attempts[:] = [t for t in attempts if now - t < RATE_LIMIT_WINDOW_SECONDS]
+    if len(attempts) >= RATE_LIMIT_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many attempts, try again in a few minutes.")
+
+
+def _record_failed_login(key: str) -> None:
+    _login_attempts[key].append(time.time())
+
+
+# Precomputed once at import time so a login attempt against an
+# unknown email still runs a real bcrypt comparison instead of
+# returning immediately - bcrypt's cost is what a timing attack would
+# measure, so "no such user" and "wrong password" need to spend
+# roughly the same time here to not leak which case it was.
+_DUMMY_PASSWORD_HASH = bcrypt.hashpw(b"not-a-real-password", bcrypt.gensalt()).decode("utf-8")
+
+
 def display_name(raw_name: Optional[str], email: str) -> str:
     """
     The real stored name if there is one; otherwise the email's own
@@ -334,26 +367,86 @@ def signup(req: SignupRequest) -> AuthResponse:
 
 
 @app.post("/api/auth/login", response_model=AuthResponse)
-def login(req: LoginRequest) -> AuthResponse:
-    user = get_user_by_email(req.email)
+def login(req: LoginRequest, request: Request) -> AuthResponse:
+    email = req.email.strip().lower()
+    client_ip = request.client.host if request.client else "unknown"
+    ip_key = f"ip:{client_ip}"
+    email_key = f"email:{email}"
 
-    # No account found
-    if user is None:
-        raise HTTPException(
-            status_code=404,
-            detail="No account found with this email. Please create an account first."
-        )
+    _check_rate_limit(ip_key)
+    _check_rate_limit(email_key)
 
+    user = get_user_by_email(email)
+
+    # Always run a real bcrypt comparison, even for an unknown email
+    # (against the dummy hash), so both cases take about the same
+    # time - see _DUMMY_PASSWORD_HASH above.
     password_matches = bcrypt.checkpw(
         req.password.encode("utf-8"),
-        user["password_hash"].encode("utf-8")
+        (user["password_hash"] if user else _DUMMY_PASSWORD_HASH).encode("utf-8")
     )
 
+    if user is None:
+        _record_failed_login(ip_key)
+        _record_failed_login(email_key)
+        raise HTTPException(
+            status_code=404,
+            detail="No account found with this email. Want to sign up?"
+        )
+
     if not password_matches:
+        _record_failed_login(ip_key)
+        _record_failed_login(email_key)
         raise HTTPException(
             status_code=401,
-            detail="Incorrect password. Please try again."
+            detail="That password isn't right. Try again or reset it."
         )
+
+    return AuthResponse(token=user["id"], email=user["email"], name=display_name(user["name"], user["email"]))
+
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str
+
+
+# Set once you've created a real OAuth Client ID in Google Cloud
+# Console and put it in this backend's environment - see the
+# deployment notes for exactly what's needed. Left unset, this
+# endpoint honestly refuses instead of half-working.
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+
+
+@app.post("/api/auth/google", response_model=AuthResponse)
+def google_login(req: GoogleAuthRequest) -> AuthResponse:
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=501, detail="Signing in with Google isn't available yet.")
+
+    from google.oauth2 import id_token as google_id_token
+    from google.auth.transport import requests as google_requests
+
+    try:
+        claims = google_id_token.verify_oauth2_token(
+            req.id_token, google_requests.Request(), GOOGLE_CLIENT_ID
+        )
+    except ValueError:
+        raise HTTPException(status_code=401, detail="We couldn't verify that Google sign-in. Please try again.")
+
+    if not claims.get("email_verified"):
+        raise HTTPException(status_code=401, detail="That Google account's email isn't verified.")
+
+    email = claims["email"].strip().lower()
+    google_name = claims.get("name")
+
+    user = get_user_by_email(email)
+    if user is None:
+        # No password is ever set on a Google-only account - this
+        # random hash is never shown or usable, it only satisfies the
+        # column's NOT NULL constraint.
+        placeholder_hash = bcrypt.hashpw(secrets.token_urlsafe(32).encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        user_id = create_user(email, placeholder_hash, google_name)
+        user = get_user_by_id(user_id)
+    # An existing password account with this verified email just logs
+    # straight into that same account - one identity per email.
 
     return AuthResponse(token=user["id"], email=user["email"], name=display_name(user["name"], user["email"]))
 

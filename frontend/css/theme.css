@@ -265,7 +265,9 @@ body[data-page="auth"] .nav-signin, body[data-page="auth"] .pill-outline { displ
 }
 .btn-gold:hover { box-shadow: 0 0 38px rgba(245, 196, 106, 0.45); transform: translateY(-1px); }
 .btn-gold.sm { padding: 10px 20px; font-size: 13.5px; }
+.btn-gold:disabled { color: #1a1408; opacity: 0.85; cursor: default; }
 :root[data-theme="light"] .btn-gold { color: #fff; }
+:root[data-theme="light"] .btn-gold:disabled { color: #fff; }
 .btn-line {
   padding: 8px 16px; border-radius: var(--radius-pill);
   border: 1px solid var(--border-strong);

@@ -434,8 +434,8 @@
    not against each other's content height — so switching Sign in /
    Create account (which changes the card's height) never moves the
    left text. */
-.auth-copy { display: flex; flex-direction: column; justify-content: center; padding-bottom: clamp(24px, 6vh, 72px); }
-.auth-card { align-self: center; padding: 24px 30px; border-radius: var(--radius-panel); background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+.auth-copy { display: flex; flex-direction: column; justify-content: center; padding-bottom: clamp(24px, 6vh, 72px); user-select: none; -webkit-user-select: none; }
+.auth-card { align-self: center; padding: 20px 30px; border-radius: var(--radius-panel); background: var(--panel); border: 1px solid var(--border); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
 /* One screen at a time (Log in / Sign up), not tabs - #authCardInner
    is what fades on a mode switch, kept separate from .auth-card
    itself so the card's own border/background never flickers. */
@@ -443,8 +443,8 @@
 .auth-card-inner.is-switching { opacity: 0; }
 .auth-heading { font-family: var(--font-display); font-weight: 500; font-size: 26px; margin-bottom: 6px; }
 .auth-heading:focus-visible { outline: none; } /* focus is for AT/keyboard flow here, not a visible ring on a heading */
-.auth-sub { font-size: 13.5px; color: var(--muted); line-height: 1.6; margin-bottom: 20px; }
-.auth-form { display: grid; gap: 12px; }
+.auth-sub { font-size: 13.5px; color: var(--muted); line-height: 1.6; margin-bottom: 14px; }
+.auth-form { display: grid; gap: 10px; }
 .auth-form .field input, .auth-form .field select { height: 44px; padding: 0 14px; }
 .auth-form .pw-wrap input { padding-right: 64px; }
 .auth-form .btn-gold { width: 100%; height: 48px; padding: 0 28px; margin-top: 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -459,13 +459,13 @@
 .btn-spinner { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .auth-switch { margin-top: 14px; font-size: 12.5px; color: var(--muted); text-align: center; }
-.auth-switch a { color: var(--fg); text-decoration: underline; text-underline-offset: 2px; }
-.auth-or { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--faint); margin: 14px 0; }
+.auth-forgot { margin-top: 8px; font-size: 12px; text-align: right; }
+.auth-switch a, .auth-forgot a, .auth-consent a { color: var(--warm); text-decoration: none; }
+.auth-switch a:hover, .auth-forgot a:hover, .auth-consent a:hover { text-decoration: underline; text-underline-offset: 2px; }
+.auth-or { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--faint); margin: 10px 0; }
 .auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 .auth-card .btn-wide { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; padding: 0 16px; }
-.auth-fine, .auth-consent { margin-top: 12px; font-size: 11.5px; color: var(--faint); text-align: center; line-height: 1.6; }
-.auth-consent a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
-.auth-consent a:hover { color: var(--fg); }
+.auth-fine, .auth-consent { margin-top: 8px; font-size: 11.5px; color: var(--faint); text-align: center; line-height: 1.5; }
 .pw-wrap { position: relative; }
 .pw-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--muted); padding: 4px 8px; }
 
