@@ -4,13 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Kindling — AI Career Discovery</title>
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./css/theme.css">
 <link rel="stylesheet" href="./css/screens.css">
-
 <script>
     (function () {
         try {
@@ -25,65 +23,32 @@
         } catch (error) {}
     })();
 </script>
-
 <style>
-    /* ===== Hero fixes ===== */
+    /* 1. Prevent text selection/highlight bug on hero section */
     #home, .hero, .hero-copy, .hero-title, .hero-body, .eyebrow {
         -webkit-user-select: none !important;
+        -moz-user-select: none !important;
+        -ms-user-select: none !important;
         user-select: none !important;
     }
 
+    /* 2. Fix top padding so title never gets cut off under navbar */
     .hero-copy {
-        padding-top: 48px !important;
-        max-width: 580px;
+        padding-top: 30px !important;
+        margin-bottom: 24px !important;
     }
-
-    .hero-tagline {
-        font-size: 1.1rem;
-        color: #f5c46a;
-        font-style: italic;
-        margin: 20px 0 28px;
-        letter-spacing: 0.3px;
-        opacity: 0.95;
-    }
-
     .hero-copy .btn-gold {
-        margin-top: 8px;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
+        margin-bottom: 24px !important;
+        display: inline-flex !important;
     }
 
-    /* ===== Minimal industrial footer ===== */
-    .app-footer {
-        display: none;
-        border-top: 1px solid rgba(255,255,255,0.07);
-        padding: 14px 28px;
-        font-size: 0.75rem;
-        color: rgba(160,174,192,0.7);
-        background: rgba(0,0,0,0.3);
-    }
-
-    /* Only show footer on non-home pages */
-    body:not([data-page="home"]) .app-footer {
-        display: block;
-    }
-
-    .footer-inner {
-        max-width: 1100px;
-        margin: 0 auto;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .footer-inner a {
-        color: rgba(160,174,192,0.85);
-        text-decoration: none;
-        transition: color 0.2s;
-    }
-    .footer-inner a:hover {
-        color: #f5c46a;
+    /* 3. Fix overlap between "Start exploring" button and "Curious now" text */
+    .hero-foot {
+        position: relative !important;
+        bottom: auto !important;
+        margin-top: 32px !important;
+        padding-top: 12px !important;
+        z-index: 5 !important;
     }
 </style>
 </head>
@@ -97,15 +62,13 @@
     <symbol id="spark" viewBox="0 0 24 24">
       <path d="M12 0 C12.8 8 16 11.2 24 12 C16 12.8 12.8 16 12 24 C11.2 16 8 12.8 0 12 C8 11.2 11.2 8 12 0 Z" fill="currentColor"/>
     </symbol>
-    <symbol id="arrow" viewBox="0 0 12 12">
-      <path d="M1 6h9M6.5 2.5 10 6l-3.5 3.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
-    </symbol>
+    <symbol id="arrow" viewBox="0 0 12 12"><path d="M1 6h9M6.5 2.5 10 6l-3.5 3.5" stroke="currentColor" stroke-width="1.3" fill="none"/></symbol>
   </defs>
 </svg>
 
 <div class="app">
 
-  <!-- ==================== NAVIGATION ==================== -->
+  <!-- ============ NAVIGATION ============ -->
   <header class="nav">
     <a href="#home" class="brand" aria-label="Kindling home">
       <svg class="brand-star"><use href="#spark"/></svg>Kindling
@@ -120,41 +83,33 @@
     </nav>
     <div class="nav-end">
       <button class="bulb" id="bulb" aria-pressed="false" aria-label="Turn on light theme" title="Switch theme">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path class="bulb-glass" d="M9 17.5h6M9.8 20.5h4.4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16.5h5.2v-.7c0-.8.4-1.5 1-2A6 6 0 0 0 12 3Z"/>
           <path class="bulb-rays" d="M12 .5v.01M3.5 4l.01.01M20.5 4l-.01.01M1 11.5h.01M23 11.5h-.01"/>
         </svg>
       </button>
       <a href="#auth" class="nav-signin" data-auth="out">Sign in</a>
       <a href="#explore" class="pill-outline">Get started <svg width="12" height="12"><use href="#arrow"/></svg></a>
-      <a href="#settings" class="avatar" data-route="settings" id="navAvatar" aria-label="Settings">
-        <svg width="12" height="12"><use href="#spark"/></svg>
-      </a>
+      <a href="#settings" class="avatar" data-route="settings" id="navAvatar" aria-label="Settings"><svg width="12" height="12" aria-hidden="true"><use href="#spark"/></svg></a>
     </div>
   </header>
 
   <main class="viewport">
 
-    <!-- ==================== 1. HOME ==================== -->
+    <!-- ============ 1. LANDING ============ -->
     <section class="screen" id="home" aria-label="Welcome">
       <div class="hero">
         <div class="hero-scene" aria-hidden="true">
           <svg viewBox="0 0 1000 800" preserveAspectRatio="xMaxYMax slice">
             <defs>
               <radialGradient id="planetFill" cx="50%" cy="0%" r="70%">
-                <stop offset="0" stop-color="#0f1a33"/>
-                <stop offset="0.35" stop-color="#070c18"/>
-                <stop offset="1" stop-color="#04060c"/>
+                <stop offset="0" stop-color="#0f1a33"/><stop offset="0.35" stop-color="#070c18"/><stop offset="1" stop-color="#04060c"/>
               </radialGradient>
               <linearGradient id="trailGrad" x1="0" y1="1" x2="1" y2="0">
-                <stop offset="0" stop-color="#f5c46a" stop-opacity="0"/>
-                <stop offset="0.5" stop-color="#f7e3b5" stop-opacity="0.55"/>
-                <stop offset="1" stop-color="#f5c46a" stop-opacity="0.95"/>
+                <stop offset="0" stop-color="#f5c46a" stop-opacity="0"/><stop offset="0.5" stop-color="#f7e3b5" stop-opacity="0.55"/><stop offset="1" stop-color="#f5c46a" stop-opacity="0.95"/>
               </linearGradient>
               <radialGradient id="bandGrad" cx="50%" cy="50%" r="50%">
-                <stop offset="0" stop-color="#5c86d6" stop-opacity="0.35"/>
-                <stop offset="0.5" stop-color="#3a4f99" stop-opacity="0.12"/>
-                <stop offset="1" stop-color="#000" stop-opacity="0"/>
+                <stop offset="0" stop-color="#5c86d6" stop-opacity="0.35"/><stop offset="0.5" stop-color="#3a4f99" stop-opacity="0.12"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
               </radialGradient>
               <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
               <filter id="softer" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="24"/></filter>
@@ -184,26 +139,25 @@
             <circle cx="930" cy="330" r="1.4" fill="#cfe8ff" opacity="0.7"/>
           </svg>
         </div>
-
         <div class="hero-copy">
           <p class="eyebrow cool">AI-Powered Career Exploration</p>
           <h1 class="hero-title">Find your path<br>through <em>conversation.</em></h1>
-          
-          <p class="hero-body">
-            <strong>Kindling is an AI career guide</strong> that discovers your interests through natural chat. 
-            Talk about what you enjoy doing, and we’ll map your habits to 923 real careers.
-          </p>
-
-          <!-- Moved up and made clear -->
-          <p class="hero-tagline">Curious now. Clearer later.</p>
-
-          <a href="#explore" class="btn-gold">
-            Start Exploring
-            <svg width="14" height="14"><use href="#arrow"/></svg>
+          <p class="hero-body"><strong>Kindling is an AI career guide</strong> that discovers your interests through natural chat. Talk about what you enjoy doing, and we'll map your habits to 923 real careers.</p>
+          <a href="#explore" class="btn-gold">Start Exploring <svg width="14" height="14"><use href="#arrow"/></svg></a>
+        </div>
+        <ol class="journey" aria-label="How Kindling works">
+          <li>Questions</li><li>Connections</li><li>Possibilities</li><li>You</li>
+        </ol>
+        <div class="hero-foot">
+          <p>Curious now.<br>Clearer later.</p>
+          <a class="scroll-cue" href="#explore">
+            <span><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><path d="M5 1v9M1.5 6.5 5 10l3.5-3.5" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></span>
+            Begin discovery chat
           </a>
         </div>
       </div>
 
+      <!-- Gokul's Original Full Footer -->
       <footer class="site-footer">
         <div class="site-footer-top">
           <div class="site-footer-brand">
@@ -222,23 +176,24 @@
       </footer>
     </section>
 
-    <!-- ==================== 2. EXPLORE ==================== -->
+    <!-- ============ 2. EXPLORE ============ -->
     <section class="screen" id="explore" aria-label="Explore">
       <div class="explore-layout">
+
         <div class="threads-backdrop" id="threadsBackdrop" hidden></div>
 
         <aside class="threads-sidebar" id="threadsSidebar" aria-label="Your threads">
           <div class="threads-head">
             <p class="threads-label">Your threads</p>
-            <button type="button" class="threads-collapse" id="threadsCollapse" aria-label="Collapse sidebar" aria-expanded="true">
-              <svg width="12" height="12" viewBox="0 0 12 12"><path d="M8 1 3 6l5 5" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>
+            <button type="button" class="threads-collapse" id="threadsCollapse" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse">
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M8 1 3 6l5 5" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <button type="button" class="threads-expand" id="threadsExpand" aria-label="Expand sidebar" hidden>
-              <svg width="12" height="12" viewBox="0 0 12 12"><path d="M4 1l5 5-5 5" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 1l5 5-5 5" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </div>
           <button type="button" class="threads-new" id="newThread">
-            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg>
             <span>New thread</span>
           </button>
           <div class="threads-list" id="threadsList"></div>
@@ -246,25 +201,25 @@
 
         <div class="thread">
           <div class="thread-head">
-            <button type="button" class="link-btn threads-mobile-toggle" id="threadsMobileToggle">Threads</button>
-            <span class="thread-title">
-              <svg><use href="#spark"/></svg>
-              <span id="threadProgress">Question 1 of 7</span>
-            </span>
+            <button type="button" class="link-btn threads-mobile-toggle" id="threadsMobileToggle">
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1 3h10M1 6h10M1 9h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+              Threads
+            </button>
+            <span class="thread-title"><svg><use href="#spark"/></svg><span id="threadProgress">Question 1 of 7</span></span>
           </div>
           <div class="feed" id="feed" aria-live="polite"></div>
           <form class="composer" id="composer" autocomplete="off">
             <label for="ask" class="sr-only">Your question</label>
             <textarea id="ask" rows="1" placeholder="Tell me what you've been curious about or tinkering with lately…"></textarea>
             <button class="send" type="submit" aria-label="Send" disabled>
-              <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 11 11 3M5 3h6v6" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 11 11 3M5 3h6v6" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
             </button>
           </form>
         </div>
       </div>
     </section>
 
-    <!-- ==================== 3. INFERENCE ==================== -->
+    <!-- ============ 3. INFERENCE ============ -->
     <section class="screen" id="inference" aria-label="Inference">
       <div class="inf-page">
         <header class="inf-head">
@@ -285,7 +240,8 @@
             <ul class="evidence-list" id="evidenceList"></ul>
           </div>
         </div>
-
+        
+        <!-- Gokul's Compact Footer -->
         <footer class="page-foot-compact">
           <a href="#about">About</a><span class="dot">·</span>
           <a href="#privacy">Privacy</a><span class="dot">·</span>
@@ -296,42 +252,40 @@
       </div>
     </section>
 
-    <!-- ==================== 4. CAREER GRAPH ==================== -->
+    <!-- ============ 4. CAREER GRAPH ============ -->
     <section class="screen" id="graph" aria-label="Career Graph">
-      <div class="graph-page">
-        <div class="map-layout">
-          <div class="map-pane">
-            <div class="graph-frame" id="graphFrame">
-              <svg id="graphMap" role="group" aria-label="Map of fields and careers connected to your exploration">
-                <g id="graphLayer"></g>
-              </svg>
-              <div class="graph-filter segmented" role="radiogroup" aria-label="Show on the map">
-                <button type="button" role="radio" aria-checked="true" data-filter="all">Show everything</button>
-                <button type="button" role="radio" aria-checked="false" data-filter="opened">Only what I've opened</button>
-              </div>
-              <div class="graph-tools">
-                <button class="icon-btn" id="zoomIn" aria-label="Zoom in"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg></button>
-                <button class="icon-btn" id="zoomOut" aria-label="Zoom out"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg></button>
-                <button class="icon-btn" id="zoomFit" aria-label="Fit whole map"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>
-                <span>Drag, scroll to zoom</span>
-              </div>
+      <div class="map-layout">
+        <div class="map-pane">
+          <div class="graph-frame" id="graphFrame">
+            <svg id="graphMap" role="group" aria-label="Map of fields and careers connected to your exploration">
+              <g id="graphLayer"></g>
+            </svg>
+            <div class="graph-filter segmented" role="radiogroup" aria-label="Show on the map">
+              <button type="button" role="radio" aria-checked="true" data-filter="all">Show everything</button>
+              <button type="button" role="radio" aria-checked="false" data-filter="opened">Only what I've opened</button>
+            </div>
+            <div class="graph-tools">
+              <button class="icon-btn" id="zoomIn" aria-label="Zoom in"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg></button>
+              <button class="icon-btn" id="zoomOut" aria-label="Zoom out"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 6h10" stroke="currentColor" stroke-width="1.3"/></svg></button>
+              <button class="icon-btn" id="zoomFit" aria-label="Fit whole map"><svg width="13" height="13" viewBox="0 0 14 14"><path d="M1 5V1h4M9 1h4v4M13 9v4H9M5 13H1V9" stroke="currentColor" stroke-width="1.3" fill="none"/></svg></button>
+              <span>Drag, scroll to zoom</span>
             </div>
           </div>
-
-          <aside class="info-pane" id="graphPanel" aria-live="polite" aria-label="Explore a direction"></aside>
         </div>
-
-        <footer class="page-foot-compact">
-          <a href="#about">About</a><span class="dot">·</span>
-          <a href="#privacy">Privacy</a><span class="dot">·</span>
-          <a href="#terms">Terms</a><span class="dot">·</span>
-          <a href="#settings">Settings</a><span class="dot">·</span>
-          <span>© 2026 Kindling</span>
-        </footer>
+        <aside class="info-pane" id="graphPanel" aria-live="polite" aria-label="Explore a direction"></aside>
       </div>
+
+      <!-- Gokul's Compact Footer -->
+      <footer class="page-foot-compact">
+        <a href="#about">About</a><span class="dot">·</span>
+        <a href="#privacy">Privacy</a><span class="dot">·</span>
+        <a href="#terms">Terms</a><span class="dot">·</span>
+        <a href="#settings">Settings</a><span class="dot">·</span>
+        <span>© 2026 Kindling</span>
+      </footer>
     </section>
 
-    <!-- ==================== 5. REFLECTION ==================== -->
+    <!-- ============ 5. REFLECTION ============ -->
     <section class="screen" id="reflection" aria-label="Reflection">
       <div class="refl-page">
         <header class="inf-head">
@@ -346,26 +300,9 @@
               <h3 id="timeHead">Time spent exploring</h3>
               <ul class="time-bars" id="timeBars"></ul>
             </section>
-
-            <section class="refl-card take-card" aria-labelledby="takeHead">
-              <div class="take-head">
-                <p class="eyebrow warm" id="takeHead">Your take</p>
-                <span class="private-pill">🔒 Private to you</span>
-              </div>
-              <h3 class="take-title">How does this feel so far?</h3>
-              <p class="refl-sub">Anything you want to see more or less of, or a role that caught you off guard? This is just for you. Kindling listens, it doesn't grade.</p>
-
-              <form class="take-form" id="takeForm">
-                <label for="takeInput" class="sr-only">Your take</label>
-                <textarea id="takeInput" maxlength="1000" rows="4" placeholder="Tell Kindling what you noticed…"></textarea>
-                <div class="take-form-foot">
-                  <span class="take-counter" id="takeCounter">0/1000</span>
-                  <button type="submit" class="btn-gold sm" id="takeSave" disabled>Save note</button>
-                </div>
-              </form>
-
-              <div class="take-chips" id="takeChips" hidden></div>
-              <div class="take-notes" id="takeNotes"></div>
+            <section class="refl-card" aria-labelledby="jHead">
+              <h3 id="jHead">Exploration timeline</h3>
+              <ol class="journey-list" id="journey"></ol>
             </section>
           </div>
           <section class="refl-card refl-right" aria-labelledby="calHead">
@@ -375,7 +312,8 @@
             <p class="whisper refl-quote">"You're not meant to have it all figured out. You're meant to keep exploring."</p>
           </section>
         </div>
-
+        
+        <!-- Gokul's Compact Footer -->
         <footer class="page-foot-compact">
           <a href="#about">About</a><span class="dot">·</span>
           <a href="#privacy">Privacy</a><span class="dot">·</span>
@@ -386,7 +324,7 @@
       </div>
     </section>
 
-    <!-- ==================== AUTH ==================== -->
+    <!-- ============ AUTH ============ -->
     <section class="screen" id="auth" aria-label="Sign in or create an account">
       <div class="auth-layout">
         <div class="auth-copy">
@@ -402,46 +340,30 @@
             <button role="tab" aria-selected="false" data-mode="signup">Create account</button>
           </div>
           <form class="auth-form" id="authForm" novalidate>
-            <div class="field" data-signup-only hidden>
-              <label for="aName">What should Kindling call you?</label>
-              <input id="aName" autocomplete="given-name">
-            </div>
-            <div class="field">
-              <label for="aEmail">Email</label>
-              <input id="aEmail" type="email" autocomplete="email">
-            </div>
-            <div class="field">
-              <label for="aPass">Password</label>
-              <div class="pw-wrap">
-                <input id="aPass" type="password" autocomplete="current-password">
-                <button type="button" class="pw-toggle" id="pwToggle">Show</button>
-              </div>
+            <div class="field" data-signup-only hidden><label for="aName">What should Kindling call you?</label><input id="aName" autocomplete="given-name"></div>
+            <div class="field"><label for="aEmail">Email</label><input id="aEmail" type="email" autocomplete="email"></div>
+            <div class="field"><label for="aPass">Password</label>
+              <div class="pw-wrap"><input id="aPass" type="password" autocomplete="current-password"><button type="button" class="pw-toggle" id="pwToggle">Show</button></div>
             </div>
             <p class="auth-error" id="authError" role="alert"></p>
             <button class="btn-gold" type="submit" id="authSubmit">Sign in</button>
           </form>
           <p class="auth-or">or</p>
           <button class="btn-line btn-wide" id="googleBtn" onclick="alert('Google Sign-In is coming soon. Please use email & password for now.'); return false;">
-            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-              <path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-1.9 3.2-4.8 3.2-8Z"/>
-              <path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.7c-1 .7-2.2 1-3.7 1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.8A11 11 0 0 0 12 23Z"/>
-              <path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 0 1 0-4.2V7.1H2.1a11 11 0 0 0 0 9.8l3.7-2.8Z"/>
-              <path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1l3.7 2.8C6.7 7.3 9.1 5.4 12 5.4Z"/>
-            </svg>
-            Continue with Google
-          </button>
-          <p class="auth-fine">Your exploration stays private to you.</p>
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-1.9 3.2-4.8 3.2-8Z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.7c-1 .7-2.2 1-3.7 1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.8A11 11 0 0 0 12 23Z"/><path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 0 1 0-4.2V7.1H2.1a11 11 0 0 0 0 9.8l3.7-2.8Z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1l3.7 2.8C6.7 7.3 9.1 5.4 12 5.4Z"/></svg>
+            Continue with Google</button>
+          <p class="auth-fine">An account is required to explore Kindling. Your exploration stays private to you.</p>
         </div>
       </div>
     </section>
 
-    <!-- ==================== SETTINGS ==================== -->
+    <!-- ============ SETTINGS ============ -->
     <section class="screen" id="settings" aria-label="Settings">
       <div class="settings-wrap">
         <div class="settings-head">
           <p class="eyebrow">Settings</p>
           <h2 class="display">Your space, your preferences</h2>
-          <p class="lede">Manage how Kindling looks and what happens to your exploration.</p>
+          <p class="lede">Manage how Kindling looks, and what happens to your exploration.</p>
         </div>
 
         <div class="settings-grid">
@@ -453,71 +375,70 @@
           </div>
 
           <div class="settings-card">
-            <div class="settings-section is-active" id="s-appearance" role="tabpanel">
+
+            <!-- Appearance -->
+            <div class="settings-section is-active" id="s-appearance" role="tabpanel" aria-labelledby="t-appearance">
               <div class="s-head"><h2>Appearance</h2><p>Choose how Kindling looks on this device.</p></div>
               <div class="s-row">
-                <div class="s-label">Theme</div>
-                <div class="segmented" role="radiogroup" id="themeGroup">
-                  <button role="radio" data-theme-choice="system">System</button>
+                <div class="s-label">Theme<small>System follows your device setting.</small></div>
+                <div class="segmented" role="radiogroup" aria-label="Theme" id="themeGroup">
+                  <button role="radio" data-theme-choice="system" aria-checked="false">System</button>
                   <button role="radio" data-theme-choice="dark" aria-checked="true">Dark</button>
-                  <button role="radio" data-theme-choice="light">Light</button>
+                  <button role="radio" data-theme-choice="light" aria-checked="false">Light</button>
                 </div>
               </div>
               <div class="s-row">
-                <div class="s-label">Text size</div>
-                <div class="segmented" role="radiogroup" id="textGroup">
+                <div class="s-label">Text size<small>Scales text and controls across every page.</small></div>
+                <div class="segmented" role="radiogroup" aria-label="Text size" id="textGroup">
                   <button role="radio" data-text-choice="default" aria-checked="true">Default</button>
-                  <button role="radio" data-text-choice="large">Large</button>
+                  <button role="radio" data-text-choice="large" aria-checked="false">Large</button>
                 </div>
               </div>
             </div>
 
-            <div class="settings-section" id="s-exploration" role="tabpanel">
-              <div class="s-head"><h2>Exploration</h2><p>Control what Kindling remembers.</p></div>
+            <!-- Exploration -->
+            <div class="settings-section" id="s-exploration" role="tabpanel" aria-labelledby="t-exploration">
+              <div class="s-head"><h2>Exploration</h2><p>Control what Kindling remembers between visits.</p></div>
               <div class="s-row">
-                <div class="s-label">Save my exploration</div>
-                <button class="switch" role="switch" id="saveSwitch"></button>
+                <div class="s-label">Save my exploration<small>Keep your session on this browser after you close the tab.</small></div>
+                <button class="switch" role="switch" aria-checked="false" aria-label="Save my exploration" id="saveSwitch"></button>
               </div>
               <div class="s-row">
-                <div class="s-label">Reset exploration</div>
+                <div class="s-label">Reset exploration<small>Clears your thread, patterns, and career graph on this device. Can't be undone.</small></div>
                 <button class="btn-quiet" id="resetBtn">Reset</button>
               </div>
             </div>
 
-            <div class="settings-section" id="s-access" role="tabpanel">
-              <div class="s-head"><h2>Accessibility</h2></div>
+            <!-- Accessibility -->
+            <div class="settings-section" id="s-access" role="tabpanel" aria-labelledby="t-access">
+              <div class="s-head"><h2>Accessibility</h2><p>Make Kindling comfortable to use.</p></div>
               <div class="s-row">
-                <div class="s-label">Still background</div>
-                <button class="switch" role="switch" id="stillSwitch"></button>
+                <div class="s-label">Still background<small>Stops the drifting stars and shooting stars.</small></div>
+                <button class="switch" role="switch" aria-checked="false" aria-label="Still background" id="stillSwitch"></button>
               </div>
               <div class="s-row">
-                <div class="s-label">Always show labels</div>
-                <button class="switch" role="switch" id="labelsSwitch"></button>
+                <div class="s-label">Always show labels in the career graph<small>Shows every direction's name without hovering.</small></div>
+                <button class="switch" role="switch" aria-checked="false" aria-label="Always show graph labels" id="labelsSwitch"></button>
               </div>
             </div>
 
-            <div class="settings-section" id="s-account" role="tabpanel">
+            <!-- Account -->
+            <div class="settings-section" id="s-account" role="tabpanel" aria-labelledby="t-account">
               <div class="s-head">
                 <h2>Account</h2>
                 <p class="only-in">Signed in as <span id="acctEmail"></span></p>
-                <p class="only-out">You're exploring anonymously.</p>
+                <p class="only-out">You're exploring anonymously, with no account yet.</p>
               </div>
-              <div class="only-out">
-                <div class="s-row">
-                  <div class="s-label">Sign in or create an account</div>
-                  <span style="display:flex;gap:10px">
-                    <a href="#auth" class="btn-line" data-auth-mode="signup">Create account</a>
-                    <a href="#auth" class="btn-gold sm" data-auth-mode="signin">Sign in</a>
-                  </span>
-                </div>
-              </div>
-              <div class="only-in">
-                <div class="s-row">
-                  <div class="s-label">Sign out</div>
-                  <button class="btn-line" id="signOutBtn">Sign out</button>
-                </div>
-              </div>
+              <div class="only-out"><div class="s-row">
+                <div class="s-label">Sign in or create an account<small>Keep your exploration on this account across devices.</small></div>
+                <span style="display:flex;gap:10px"><a href="#auth" class="btn-line" data-auth-mode="signup">Create account</a><a href="#auth" class="btn-gold sm" data-auth-mode="signin">Sign in</a></span>
+              </div></div>
+              <div class="only-in"><div class="s-row">
+                <div class="s-label">Sign out<small>You can sign back in any time with the same email and password.</small></div>
+                <button class="btn-line" id="signOutBtn">Sign out</button>
+              </div></div>
             </div>
+
           </div>
         </div>
       </div>
@@ -579,6 +500,7 @@
         </section>
       </div>
 
+      <!-- Gokul's Original Full Footer -->
       <footer class="site-footer">
         <div class="site-footer-top">
           <div class="site-footer-brand">
@@ -656,6 +578,7 @@
         </section>
       </div>
 
+      <!-- Gokul's Original Full Footer -->
       <footer class="site-footer">
         <div class="site-footer-top">
           <div class="site-footer-brand">
@@ -714,6 +637,7 @@
         </section>
       </div>
 
+      <!-- Gokul's Original Full Footer -->
       <footer class="site-footer">
         <div class="site-footer-top">
           <div class="site-footer-brand">
@@ -732,18 +656,6 @@
       </footer>
     </section>
   </main>
-
-  <!-- ==================== MINIMAL FOOTER ==================== -->
-  <footer class="app-footer">
-    <div class="footer-inner">
-      <span>Kindling · AI Career Discovery</span>
-      <div>
-        <a href="mailto:support@kindling.app">Contact Support</a>
-        <span style="margin: 0 12px; opacity: 0.4;">·</span>
-        <span>© 2025</span>
-      </div>
-    </div>
-  </footer>
 
 </div>
 
