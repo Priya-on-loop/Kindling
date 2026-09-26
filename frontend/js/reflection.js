@@ -136,7 +136,8 @@
     async function loadTimeSpent() {
 
         const timeBarsEl = $('#timeBars');
-        const sessionId = K.getSessionId();
+        const combined = K.isConnectThreadsOn();
+        const sessionId = K.getResultsSessionId();
 
         if (!sessionId) {
             timeBarsEl.innerHTML = '<li class="time-bars-empty">Time you spend exploring will show up here.</li>';
@@ -145,7 +146,8 @@
 
         try {
 
-            const response = await fetch(`${K.API_BASE_URL}/api/dashboard/timeline/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}`);
+            const scopeParam = combined ? '&scope=all' : '';
+            const response = await fetch(`${K.API_BASE_URL}/api/dashboard/timeline/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}${scopeParam}`);
 
             if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
@@ -336,11 +338,22 @@
         });
     }
 
+    function refreshScopeBar() {
+        K.renderScopeBar($('#reflectionScopeBar'), loadTimeSpent);
+    }
+
     K.onRoute.reflection = () => {
+        refreshScopeBar();
         loadTimeSpent();
         renderCalibration();
         loadTakeNotes();
         requestAnimationFrame(() => $('#reflection').classList.add('is-shown'));
     };
+
+    window.addEventListener('kindling:scope-change', () => {
+        if (document.body.dataset.page !== 'reflection') return;
+        refreshScopeBar();
+        loadTimeSpent();
+    });
 
 })();

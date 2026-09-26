@@ -392,7 +392,13 @@ def _load_reflection_shaping(session_id: str):
     user_id = get_session_user_id(session_id)
     if not user_id:
         return frozenset(), frozenset(), []
+    return _load_reflection_shaping_for_user(user_id)
 
+
+def _load_reflection_shaping_for_user(user_id: str):
+    """Same as _load_reflection_shaping, for callers (Connect Threads'
+    combined mode) that already have the real user id and no single
+    session to resolve it from."""
     prefs = get_active_reflection_preferences(user_id)
     hidden_ids, hidden_field_codes = set(), set()
     focus_targets = []
@@ -478,13 +484,26 @@ def build_career_tree(session_id: str) -> dict:
         return {"nodes": [{"id": "you", "type": "hub", "label": "You"}], "edges": []}
 
     decisions = get_latest_trait_decisions(session_id)
+    hidden_ids, hidden_field_codes, focus_targets = _load_reflection_shaping(session_id)
+    return build_career_tree_core(scores, decisions, hidden_ids, hidden_field_codes, focus_targets)
+
+
+def build_career_tree_core(scores: dict, decisions: dict, hidden_ids: frozenset,
+                            hidden_field_codes: frozenset, focus_targets: list) -> dict:
+    """
+    The actual tree-building logic build_career_tree wraps, taking its
+    real inputs directly instead of a session_id to resolve them from
+    - lets Connect Threads' combined mode (backend/main.py) feed it a
+    freshly-scored combined transcript and cross-session decisions/
+    preferences through this exact same deterministic structure,
+    rather than a second tree builder.
+    """
     shown_patterns = determine_shown_patterns(scores, decisions)
 
     if not shown_patterns:
         return {"nodes": [{"id": "you", "type": "hub", "label": "You"}], "edges": []}
 
     high_points = load_interest_high_points()
-    hidden_ids, hidden_field_codes, focus_targets = _load_reflection_shaping(session_id)
     selected_by_pattern, all_selected = select_occupations(
         scores, shown_patterns, high_points, hidden_ids, hidden_field_codes
     )

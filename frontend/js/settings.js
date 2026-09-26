@@ -100,6 +100,11 @@
         toast(on ? 'Your session will be kept on this device' : 'Your session will clear when you close this tab');
     });
 
+    toggle($('#connectThreadsSwitch'), K.isConnectThreadsOn(), on => {
+        K.setConnectThreads(on);
+        toast(on ? 'Combining all your conversations into one picture' : 'Each conversation now shows its own picture again');
+    });
+
     toggle($('#stillSwitch'), false, on => {
         K.stillBackground = on;
         K.startSky();

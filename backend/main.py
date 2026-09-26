@@ -37,8 +37,12 @@ from db import (
     log_event,
     get_dashboard_metrics,
     get_session_timeline,
+    get_timeline_for_sessions,
     get_field_summary,
     get_latest_inference_scores,
+    get_latest_trait_decisions_for_sessions,
+    get_combined_messages_for_user,
+    get_user_content_fingerprint,
     create_user,
     get_user_by_email,
     get_user_by_id,
@@ -65,7 +69,7 @@ from score_session import score_session
 from rag_explanation import get_top_tasks_for_occupation, compose_explanation, validate_explanation
 from matching import match_occupations, load_career_graph, MAX_RESULTS
 from title_generator import generate_title, build_fallback_title
-from career_tree import build_career_tree
+from career_tree import build_career_tree, build_career_tree_core, _load_reflection_shaping_for_user
 from tree_enrichment import enrich_tree_with_ai
 from reflection_extract import extract_reflection_note
 from reflection_apply import (
@@ -704,12 +708,16 @@ def get_session_history(session_id: str, token: str):
 # ── Inference API ─────────────────────────────────────────────
 
 @app.get("/api/chat/inference/{session_id}")
-def get_inference_scores(session_id: str, token: str):
+def get_inference_scores(session_id: str, token: str, scope: str = "single"):
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
-    require_session_owner(session_id, token)
+    user_id = require_session_owner(session_id, token)
 
-    scores = get_latest_inference_scores(session_id)
+    if scope == "all":
+        scores = get_combined_inference_scores(user_id)
+    else:
+        scores = get_latest_inference_scores(session_id)
+
     if scores is None:
         raise HTTPException(
             status_code=404,
@@ -720,6 +728,7 @@ def get_inference_scores(session_id: str, token: str):
     return {
         "status": "success",
         "session_id": session_id,
+        "scope": "all" if scope == "all" else "single",
         "inference": clean_scores,
         "inference_failed": scores.get("inference_failed", False)
     }
@@ -774,15 +783,76 @@ def get_career_graph(session_id: str, token: str, max_results: int = MAX_RESULTS
 # In-memory cache for instant career tree rendering
 CAREER_TREE_CACHE = {}
 
-@app.get("/api/career-tree/{session_id}")
-def get_career_tree(session_id: str, token: str):
+# ── Connect Threads (combined-scope results) ────────────────────
+# Both keyed by f"{user_id}:{get_user_content_fingerprint(user_id)}" -
+# the fingerprint changes the moment any of that user's real sessions
+# gets a new message, so a stale combined result is never served
+# without needing an explicit invalidation call anywhere messages get
+# written (same content-addressed pattern CAREER_TREE_CACHE above
+# already uses per session).
+USER_SCORE_CACHE: Dict[str, Optional[dict]] = {}
+USER_TREE_CACHE: Dict[str, dict] = {}
+
+
+def get_combined_inference_scores(user_id: str) -> Optional[dict]:
     """
-    Returns the 3-tier career tree graph for a session.
-    Cached in memory per session + score state for instant 0.01s page loads.
+    The real, single combined score for every real session this user
+    has - re-scores the whole concatenated transcript through the
+    exact same score_session() call used per-session, once per real
+    content change (cached after that), rather than averaging
+    separate per-session scores after the fact.
+    """
+    cache_key = f"{user_id}:{get_user_content_fingerprint(user_id)}"
+    if cache_key in USER_SCORE_CACHE:
+        return USER_SCORE_CACHE[cache_key]
+
+    messages = get_combined_messages_for_user(user_id)
+    scores = score_session(messages) if messages else None
+    USER_SCORE_CACHE[cache_key] = scores
+    return scores
+
+@app.get("/api/career-tree/{session_id}")
+def get_career_tree(session_id: str, token: str, scope: str = "single"):
+    """
+    Returns the 3-tier career tree graph for a session, or (scope=all)
+    for every real session this user has combined into one. Cached in
+    memory per scope + score state for instant page loads either way.
     """
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
-    require_session_owner(session_id, token)
+    user_id = require_session_owner(session_id, token)
+
+    if scope == "all":
+        scores = get_combined_inference_scores(user_id)
+        if scores is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Inference scores are not available yet. Please complete at least {TOTAL_PHASE1_QUESTIONS} chat turns."
+            )
+
+        cache_key = f"all:{user_id}:{get_user_content_fingerprint(user_id)}"
+        if cache_key in USER_TREE_CACHE:
+            return USER_TREE_CACHE[cache_key]
+
+        session_ids = [s["session_id"] for s in get_sessions_for_user(user_id)]
+        decisions = get_latest_trait_decisions_for_sessions(session_ids)
+        hidden_ids, hidden_field_codes, focus_targets = _load_reflection_shaping_for_user(user_id)
+        tree = build_career_tree_core(scores, decisions, hidden_ids, hidden_field_codes, focus_targets)
+
+        try:
+            tree = enrich_tree_with_ai(tree, get_combined_messages_for_user(user_id))
+        except Exception as e:
+            print(f"[Career Tree Enrichment Fallback Triggered - combined]: {e}")
+
+        result = {
+            "status": "success",
+            "session_id": session_id,
+            "scope": "all",
+            "nodes": tree["nodes"],
+            "edges": tree["edges"],
+        }
+        USER_TREE_CACHE[cache_key] = result
+        return result
 
     scores = get_latest_inference_scores(session_id)
     if scores is None:
@@ -801,7 +871,7 @@ def get_career_tree(session_id: str, token: str):
 
     # Optional AI enrichment with graceful timeout/fallback
     try:
-        tree = enrich_tree_with_ai(tree, session_id)
+        tree = enrich_tree_with_ai(tree, get_messages(session_id))
     except Exception as e:
         print(f"[Career Tree Enrichment Fallback Triggered]: {e}")
         # Falls back cleanly to the instant base tree if LLMs are slow
@@ -809,6 +879,7 @@ def get_career_tree(session_id: str, token: str):
     result = {
         "status": "success",
         "session_id": session_id,
+        "scope": "single",
         "nodes": tree["nodes"],
         "edges": tree["edges"],
     }
@@ -959,7 +1030,7 @@ def save_reflection_note(req: ReflectionNoteRequest):
     # backed (tree_enrichment.py), so this is cheap once their real
     # Career Graph has already been viewed once this session.
     tree = build_career_tree(req.session_id)
-    tree = enrich_tree_with_ai(tree, req.session_id)
+    tree = enrich_tree_with_ai(tree, get_messages(req.session_id))
 
     note_id = create_reflection_note(user_id, req.session_id, note_text)
     created_preferences = []
@@ -1067,11 +1138,17 @@ def get_metrics(token: str):
 
 
 @app.get("/api/dashboard/timeline/{session_id}")
-def get_timeline(session_id: str, token: str):
+def get_timeline(session_id: str, token: str, scope: str = "single"):
     if not session_exists(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
-    require_session_owner(session_id, token)
-    return {"session_id": session_id, "timeline": get_session_timeline(session_id)}
+    user_id = require_session_owner(session_id, token)
+
+    if scope == "all":
+        session_ids = [s["session_id"] for s in get_sessions_for_user(user_id)]
+        timeline = get_timeline_for_sessions(session_ids)
+        return {"session_id": session_id, "scope": "all", "timeline": timeline}
+
+    return {"session_id": session_id, "scope": "single", "timeline": get_session_timeline(session_id)}
 
 
 @app.get("/api/dashboard/field-summary")

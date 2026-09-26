@@ -158,4 +158,109 @@
         return Boolean(K.getAuthToken());
     };
 
+    /* =====================================================
+       CONNECT THREADS
+       Off by default: Inference, Career Graph, and Reflection each
+       read one real thread's results (K.getResultsSessionId(), which
+       defaults to the active Explore thread but can be switched
+       independently via the scope bar below). On: those same three
+       pages ask the backend for scope=all instead - the real combined
+       result across every one of this account's real threads.
+       Persisted like every other Settings toggle (localStorage only,
+       no backend settings storage exists for any of them).
+       ===================================================== */
+
+    const CONNECT_THREADS_KEY = 'kindling_connect_threads';
+    let resultsSessionId = null;
+
+    K.isConnectThreadsOn = function isConnectThreadsOn() {
+        try { return localStorage.getItem(CONNECT_THREADS_KEY) === 'true'; }
+        catch (error) { return false; }
+    };
+
+    K.setConnectThreads = function setConnectThreads(on) {
+        try { localStorage.setItem(CONNECT_THREADS_KEY, on ? 'true' : 'false'); }
+        catch (error) {}
+        window.dispatchEvent(new CustomEvent('kindling:scope-change'));
+    };
+
+    // The thread Inference/Career Graph/Reflection show in single
+    // mode - independent of K.getSessionId() (Explore's own active
+    // thread), so picking a different thread in the switcher doesn't
+    // change what Explore is doing. Resets to "follow the active
+    // thread" (null) on a fresh page load - not persisted, since
+    // there's no real expectation this survives a reload the way the
+    // Connect Threads toggle itself does.
+    K.getResultsSessionId = function getResultsSessionId() {
+        return resultsSessionId || K.getSessionId();
+    };
+
+    // No event dispatch here on purpose - the dropdown's own onChange
+    // (below) already calls the caller's refetch directly, and the
+    // internal "default to a real thread" correction in
+    // renderScopeBar also uses this, which would otherwise re-enter
+    // itself via the scope-change listener each page sets up.
+    K.setResultsSessionId = function setResultsSessionId(id) {
+        resultsSessionId = id;
+    };
+
+    K.fetchUserThreads = async function fetchUserThreads() {
+        const token = K.getAuthToken();
+        if (!token) return [];
+        try {
+            const response = await fetch(`${K.API_BASE_URL}/api/auth/sessions?token=${encodeURIComponent(token)}`);
+            if (!response.ok) return [];
+            const data = await response.json();
+            return Array.isArray(data.sessions) ? data.sessions : [];
+        }
+        catch (error) {
+            return [];
+        }
+    };
+
+    /*
+     * Shared "Showing: ..." bar for Inference/Career Graph/Reflection
+     * - one implementation so the three pages can't drift out of sync
+     * on what this looks like or how switching threads/scope behaves.
+     * onChange fires after every real switch (thread or scope) so the
+     * calling page can refetch its own data without a full reload.
+     */
+    K.renderScopeBar = async function renderScopeBar(container, onChange) {
+        if (!container) return;
+
+        const combined = K.isConnectThreadsOn();
+
+        if (combined) {
+            container.innerHTML = `<span class="scope-label">Showing: all conversations</span>`;
+            return;
+        }
+
+        const threads = await K.fetchUserThreads();
+        const activeId = K.getResultsSessionId();
+        const active = threads.find(t => t.session_id === activeId) || threads[0];
+
+        if (!active) {
+            container.innerHTML = `<span class="scope-label">Showing: this conversation</span>`;
+            return;
+        }
+
+        if (active.session_id !== activeId) K.setResultsSessionId(active.session_id);
+
+        if (threads.length <= 1) {
+            container.innerHTML = `<span class="scope-label">Showing: ${K.esc(active.label)}</span>`;
+            return;
+        }
+
+        container.innerHTML = `
+      <span class="scope-label">Showing:</span>
+      <select class="scope-switcher" aria-label="Choose which thread to show">
+        ${threads.map(t => `<option value="${t.session_id}"${t.session_id === active.session_id ? ' selected' : ''}>${K.esc(t.label)}</option>`).join('')}
+      </select>`;
+
+        container.querySelector('.scope-switcher').addEventListener('change', e => {
+            K.setResultsSessionId(e.target.value);
+            onChange?.();
+        });
+    };
+
 })();

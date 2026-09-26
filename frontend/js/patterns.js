@@ -68,7 +68,12 @@
 
     K.setFeeling = async function setFeeling(traitKey, action) {
 
-        const sessionId = K.getSessionId();
+        // Whichever thread's results are actually on screen right now
+        // (the Connect Threads switcher can point this at a different
+        // thread than Explore's own active one) - not K.getSessionId()
+        // directly, so a calibration decision always attaches to the
+        // real conversation it was actually made while looking at.
+        const sessionId = K.getResultsSessionId();
 
         if (!sessionId) {
             K.toast("Start exploring first. There's nothing to calibrate yet.");

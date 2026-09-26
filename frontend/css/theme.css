@@ -254,6 +254,18 @@ body[data-page="auth"] .nav-signin, body[data-page="auth"] .pill-outline { displ
 .whisper { font-family: var(--font-display); font-style: italic; font-size: 17px; line-height: 1.45; color: var(--muted); }
 .section-label { font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0.4px; margin-bottom: 10px; }
 
+/* Connect Threads' "Showing: ..." bar - shared by Inference, Career
+   Graph, and Reflection (see K.renderScopeBar in session.js) so all
+   three look and behave identically. */
+.scope-bar { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 26px; }
+.scope-bar .scope-label { color: var(--muted); }
+.scope-bar .scope-switcher {
+  font: inherit; color: var(--fg); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-pill);
+  padding: 4px 10px; max-width: 220px;
+}
+#graphScopeBar.scope-bar { margin: 0 0 10px; }
+
 /* =========================================================
    SURFACES + BUTTONS
    ========================================================= */

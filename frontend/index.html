@@ -214,6 +214,7 @@
           <p class="eyebrow cool">Inference</p>
           <h2 class="display">Here's the shape we're starting to see</h2>
           <p class="lede">Patterns that keep showing up in how you explore. Select a star to learn more. Nothing here is a score.</p>
+          <div class="scope-bar" id="inferenceScopeBar"></div>
         </header>
 
         <div class="inf-grid">
@@ -242,6 +243,8 @@
 
     <!-- ============ 4. CAREER GRAPH ============ -->
     <section class="screen" id="graph" aria-label="Career Graph">
+      <div class="graph-page">
+      <div class="scope-bar" id="graphScopeBar"></div>
       <div class="map-layout" id="graphLayout">
         <aside class="info-pane" id="graphPanel" aria-live="polite" aria-label="Explore a direction"></aside>
         <div class="map-pane">
@@ -272,6 +275,7 @@
         <a href="#settings" data-auth="in">Settings</a><span class="dot" data-auth="in">·</span>
         <span>© 2026 Kindling</span>
       </footer>
+      </div>
     </section>
 
     <!-- ============ 5. REFLECTION ============ -->
@@ -281,6 +285,7 @@
           <p class="eyebrow">Reflection</p>
           <h2 class="display">Looking back, looking forward</h2>
           <p class="lede">Where your exploration has gone, and how the patterns feel to you.</p>
+          <div class="scope-bar" id="reflectionScopeBar"></div>
         </header>
 
         <div class="refl-grid">
@@ -432,6 +437,10 @@
               <div class="s-row">
                 <div class="s-label">Save my exploration<small>Keep your session on this browser after you close the tab.</small></div>
                 <button class="switch" role="switch" aria-checked="false" aria-label="Save my exploration" id="saveSwitch"></button>
+              </div>
+              <div class="s-row">
+                <div class="s-label">Connect Threads<small>When off, each conversation has its own patterns, career graph and reflection. When on, Kindling combines all your conversations into one picture.</small></div>
+                <button class="switch" role="switch" aria-checked="false" aria-label="Connect Threads" id="connectThreadsSwitch"></button>
               </div>
               <div class="s-row">
                 <div class="s-label">Reset exploration<small>Clears your thread, patterns, and career graph on this device. Can't be undone.</small></div>

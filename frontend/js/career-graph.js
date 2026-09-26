@@ -63,7 +63,8 @@
 
     async function loadTree() {
 
-        const sessionId = K.getSessionId();
+        const combined = K.isConnectThreadsOn();
+        const sessionId = K.getResultsSessionId();
 
         if (!sessionId) {
             renderEmpty("Your career map is waiting! Head over to Explore and start a conversation first.");
@@ -72,7 +73,8 @@
 
         try {
 
-            const response = await fetch(`${K.API_BASE_URL}/api/career-tree/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}`);
+            const scopeParam = combined ? '&scope=all' : '';
+            const response = await fetch(`${K.API_BASE_URL}/api/career-tree/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}${scopeParam}`);
 
             if (response.status === 404) {
                 const body = await response.json().catch(() => null);
@@ -610,9 +612,20 @@
     });
     addEventListener('pointerup', () => { if (!drag) return; drag = null; frame.classList.remove('is-panning'); setTimeout(() => { dragMoved = false; }, 0); });
 
+    function refreshScopeBar() {
+        K.renderScopeBar($('#graphScopeBar'), loadTree);
+    }
+
     K.onRoute.graph = () => {
+        refreshScopeBar();
         loadTree();
         requestAnimationFrame(() => { view.k = fitK(); applyView(); });
     };
+
+    window.addEventListener('kindling:scope-change', () => {
+        if (document.body.dataset.page !== 'graph') return;
+        refreshScopeBar();
+        loadTree();
+    });
 
 })();

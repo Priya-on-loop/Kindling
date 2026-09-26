@@ -30,7 +30,7 @@ ROOT_DIR = BACKEND_DIR.parent
 sys.path.append(str(BACKEND_DIR))
 sys.path.append(str(ROOT_DIR / "ai_core"))
 
-from db import get_messages, get_cached_string, set_cached_string
+from db import get_cached_string, set_cached_string
 from tree_naming import (
     generate_field_name,
     generate_career_short_title,
@@ -60,8 +60,7 @@ LETTER_TO_AXIS = {"R": "builds_tinkers", "I": "investigates_why", "A": "creates_
                    "S": "works_with_people", "C": "organizes_systems", "E": "leads_persuades"}
 
 
-def _user_evidence_text(session_id: str) -> str:
-    messages = get_messages(session_id)
+def _user_evidence_text(messages: list[dict]) -> str:
     user_lines = [m["content"] for m in messages if m["role"] == "user"]
     return "\n".join(user_lines)[:3000]
 
@@ -73,8 +72,17 @@ def _run_job(job):
     return apply_fn, value
 
 
-def enrich_tree_with_ai(tree: dict, session_id: str) -> dict:
-    evidence_text = _user_evidence_text(session_id)
+def enrich_tree_with_ai(tree: dict, messages: list[dict]) -> dict:
+    """
+    messages is whatever real transcript this tree was actually built
+    from - one session's (existing single-thread behavior) or a
+    Connect Threads combined transcript across every real session -
+    used only to write evidence-grounded "why" copy; the enrichment
+    cache itself is keyed by its content hash either way, so combined
+    and single-session enrichment never collide or overwrite the
+    other's cached copy for the same occupation.
+    """
+    evidence_text = _user_evidence_text(messages)
     evidence_hash = hashlib.sha256(evidence_text.encode("utf-8")).hexdigest()[:16]
 
     careers_by_field = {}

@@ -392,21 +392,24 @@ def get_latest_inference_scores(session_id: str) -> dict | None:
     return None
 
 
-def get_latest_trait_decisions(session_id: str) -> dict:
+def get_latest_trait_decisions_for_sessions(session_ids: list[str]) -> dict:
     """
-    The most recent accept/reject decision per RIASEC trait, from the
-    real trait_accepted/trait_rejected events POST /api/user/trait/
-    decision already logs — there's no dedicated calibration table,
-    so this reads the same events table score/timeline queries use.
-    Returns {trait: "accept" | "reject"}; a trait never decided on
-    is simply absent, not a fabricated "neutral" entry.
+    Same real trait_accepted/trait_rejected folding as
+    get_latest_trait_decisions, generalized to several sessions at
+    once (Connect Threads' combined mode) - ordered by the events
+    table's own global id, so "latest" is true chronological order
+    across sessions, not just last-session-wins.
     """
+    if not session_ids:
+        return {}
+
     conn = get_db()
-    rows = conn.execute("""
+    placeholders = ",".join("?" for _ in session_ids)
+    rows = conn.execute(f"""
         SELECT event_type, event_data FROM events
-        WHERE session_id = ? AND event_type IN ('trait_accepted', 'trait_rejected')
+        WHERE session_id IN ({placeholders}) AND event_type IN ('trait_accepted', 'trait_rejected')
         ORDER BY id ASC
-    """, (session_id,)).fetchall()
+    """, tuple(session_ids)).fetchall()
     conn.close()
 
     decisions = {}
@@ -420,6 +423,18 @@ def get_latest_trait_decisions(session_id: str) -> dict:
             decisions[trait] = "accept" if row["event_type"] == "trait_accepted" else "reject"
 
     return decisions
+
+
+def get_latest_trait_decisions(session_id: str) -> dict:
+    """
+    The most recent accept/reject decision per RIASEC trait, from the
+    real trait_accepted/trait_rejected events POST /api/user/trait/
+    decision already logs — there's no dedicated calibration table,
+    so this reads the same events table score/timeline queries use.
+    Returns {trait: "accept" | "reject"}; a trait never decided on
+    is simply absent, not a fabricated "neutral" entry.
+    """
+    return get_latest_trait_decisions_for_sessions([session_id])
 
 
 def get_cached_string(cache_key: str) -> str | None:
@@ -488,18 +503,65 @@ def get_session_timeline(session_id: str) -> list[dict]:
     """
     TCP-54: Returns an ordered, chronological timeline combining messages and events for a session.
     """
+    return get_timeline_for_sessions([session_id])
+
+
+def get_timeline_for_sessions(session_ids: list[str]) -> list[dict]:
+    """
+    Same timeline shape as get_session_timeline, across several real
+    sessions at once (Connect Threads' combined mode) - one merged,
+    chronologically ordered timeline, not several separate ones.
+    """
+    if not session_ids:
+        return []
+
     conn = get_db()
-    cursor = conn.execute("""
-        SELECT 'message' AS item_type, sender AS detail, content AS data, timestamp 
-        FROM messages WHERE session_id = ?
+    placeholders = ",".join("?" for _ in session_ids)
+    cursor = conn.execute(f"""
+        SELECT 'message' AS item_type, sender AS detail, content AS data, timestamp
+        FROM messages WHERE session_id IN ({placeholders})
         UNION ALL
-        SELECT 'event' AS item_type, event_type AS detail, event_data AS data, timestamp 
-        FROM events WHERE session_id = ?
+        SELECT 'event' AS item_type, event_type AS detail, event_data AS data, timestamp
+        FROM events WHERE session_id IN ({placeholders})
         ORDER BY timestamp ASC
-    """, (session_id, session_id))
+    """, tuple(session_ids) * 2)
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_combined_messages_for_user(user_id: str) -> list[dict]:
+    """
+    Every real message across all of this user's real sessions
+    (get_sessions_for_user's own "at least one real user message"
+    definition), oldest session first and messages within each
+    session in their own real order - one continuous transcript, the
+    same {"role", "content"} shape get_messages() already returns per
+    session, ready for score_session() unchanged.
+    """
+    sessions_newest_first = get_sessions_for_user(user_id)
+    combined = []
+    for session in reversed(sessions_newest_first):
+        combined.extend(get_messages(session["session_id"]))
+    return combined
+
+
+def get_user_content_fingerprint(user_id: str) -> str:
+    """
+    Changes whenever any of this user's real sessions gets a new
+    message - used as part of the combined-mode cache key so a stale
+    "all threads" result is never served after new real content
+    exists (see main.py's USER_SCORE_CACHE/USER_TREE_CACHE).
+    """
+    conn = get_db()
+    row = conn.execute("""
+        SELECT COUNT(*) AS cnt, COALESCE(MAX(m.id), 0) AS last_id
+        FROM messages m
+        JOIN sessions s ON s.session_id = m.session_id
+        WHERE s.user_id = ?
+    """, (user_id,)).fetchone()
+    conn.close()
+    return f"{row['cnt']}:{row['last_id']}"
 
 
 def get_field_summary() -> dict:

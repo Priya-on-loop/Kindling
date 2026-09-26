@@ -147,7 +147,8 @@
     }
 
     async function loadInference() {
-        const sessionId = K.getSessionId();
+        const combined = K.isConnectThreadsOn();
+        const sessionId = K.getResultsSessionId();
 
         if (!sessionId) {
             showEmptyState("Start a conversation on Explore first to reveal your pattern map.");
@@ -155,7 +156,8 @@
         }
 
         try {
-            const response = await fetch(`${K.API_BASE_URL}/api/chat/inference/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}`);
+            const scopeParam = combined ? '&scope=all' : '';
+            const response = await fetch(`${K.API_BASE_URL}/api/chat/inference/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}${scopeParam}`);
 
             if (response.status === 404) {
                 const body = await response.json().catch(() => null);
@@ -192,8 +194,21 @@
         }
     }
 
+    function refreshScopeBar() {
+        K.renderScopeBar($('#inferenceScopeBar'), loadInference);
+    }
+
     K.onRoute.inference = () => {
+        refreshScopeBar();
         loadInference();
     };
+
+    // Connect Threads toggled, or a different thread picked in the
+    // scope bar - refetch this page's own data without a reload.
+    window.addEventListener('kindling:scope-change', () => {
+        if (document.body.dataset.page !== 'inference') return;
+        refreshScopeBar();
+        loadInference();
+    });
 
 })();
