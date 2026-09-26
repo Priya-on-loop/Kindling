@@ -17,8 +17,8 @@
                 document.documentElement.dataset.theme = theme;
             }
             var text = localStorage.getItem('kindling_text_size');
-            if (text === 'large') {
-                document.documentElement.dataset.text = 'large';
+            if (text === 'large' || text === 'xlarge') {
+                document.documentElement.dataset.text = text;
             }
         } catch (error) {}
     })();
@@ -421,6 +421,7 @@
                 <div class="segmented" role="radiogroup" aria-label="Text size" id="textGroup">
                   <button role="radio" data-text-choice="default" aria-checked="true">Default</button>
                   <button role="radio" data-text-choice="large" aria-checked="false">Large</button>
+                  <button role="radio" data-text-choice="xlarge" aria-checked="false">Extra large</button>
                 </div>
               </div>
             </div>

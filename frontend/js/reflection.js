@@ -31,11 +31,42 @@
         }
     }
 
+    const MINUTE_MS = 60 * 1000, HOUR_MS = 60 * MINUTE_MS, DAY_MS = 24 * HOUR_MS, WEEK_MS = 7 * DAY_MS, MONTH_MS = 30 * DAY_MS;
+
+    // The bars' shared max - the smallest of these that still fits
+    // the largest real value, capped at a month so nothing scales
+    // forever. Every row is read against this same scale so they
+    // stay comparable to each other.
+    const TIME_SCALES = [
+        { ms: MINUTE_MS, label: '1m' },
+        { ms: HOUR_MS, label: '1h' },
+        { ms: DAY_MS, label: '1d' },
+        { ms: WEEK_MS, label: '1w' },
+        { ms: MONTH_MS, label: '1mo' }
+    ];
+
+    function pickScale(maxMs) {
+        return TIME_SCALES.find(s => maxMs <= s.ms) || TIME_SCALES[TIME_SCALES.length - 1];
+    }
+
+    // A row's own duration, in whatever unit reads most naturally for
+    // its size - not forced into the shared scale's unit, since "3d"
+    // next to a "1mo" scale is clearer than "72h of 1mo".
     function formatDuration(ms) {
-        const totalMinutes = Math.round(ms / 60000);
-        const h = Math.floor(totalMinutes / 60);
-        const m = totalMinutes % 60;
-        return `${h}h ${String(m).padStart(2, '0')}m`;
+        if (ms < HOUR_MS) return `${Math.max(1, Math.round(ms / MINUTE_MS))}m`;
+        if (ms < DAY_MS) {
+            const h = Math.floor(ms / HOUR_MS), m = Math.round((ms % HOUR_MS) / MINUTE_MS);
+            return m > 0 ? `${h}h ${m}m` : `${h}h`;
+        }
+        if (ms < WEEK_MS) {
+            const d = Math.floor(ms / DAY_MS), h = Math.round((ms % DAY_MS) / HOUR_MS);
+            return h > 0 ? `${d}d ${h}h` : `${d}d`;
+        }
+        if (ms < MONTH_MS) {
+            const w = Math.floor(ms / WEEK_MS), d = Math.round((ms % WEEK_MS) / DAY_MS);
+            return d > 0 ? `${w}w ${d}d` : `${w}w`;
+        }
+        return `${Math.max(1, Math.round(ms / MONTH_MS))}mo`;
     }
 
     /*
@@ -77,25 +108,20 @@
             return;
         }
 
-        /*
-         * REAL BUG (found in testing): using rows[0].ms alone as the
-         * scale meant a single short interaction was always its own
-         * max, so ms/maxMs === 1 and the bar rendered 100% full
-         * regardless of how small the real duration was (confirmed:
-         * a genuine 6-second node_time event, not a near-zero/unit
-         * bug, still produced fill_pct 100). Floor the scale at 60
-         * real minutes so a few-second glance renders as the sliver
-         * it actually is, and only real accumulated time fills the
-         * bar meaningfully.
-         */
-        const SIXTY_MINUTES_MS = 60 * 60 * 1000;
-        const maxMs = Math.max(rows[0].ms, SIXTY_MINUTES_MS);
+        // Same real bug this used to floor at 60 minutes for: a
+        // single short interaction was always its own max, so
+        // ms/maxMs === 1 and the bar rendered 100% full regardless of
+        // how small the real duration was. Reading every row against
+        // the shared step scale below fixes that the same way, plus
+        // keeps the bars comparable as the largest value grows past
+        // a minute, an hour, a day, a week - capped at a month.
+        const scale = pickScale(rows[0].ms);
 
         timeBarsEl.innerHTML = rows.map(r => `
-      <li class="time-row" style="--fill-pct:${Math.round((r.ms / maxMs) * 100)}%">
+      <li class="time-row" style="--fill-pct:${Math.min(100, Math.round((r.ms / scale.ms) * 100))}%">
         <span class="time-row-area">${esc(r.pattern.label)}</span>
         <span class="time-track"><span class="time-fill"></span></span>
-        <span class="time-row-value">${esc(formatDuration(r.ms))}</span>
+        <span class="time-row-value">${esc(formatDuration(r.ms))} of ${esc(scale.label)}</span>
       </li>`).join('');
 
         // Two rAFs: one to let the 0%-width fills paint, one to then

@@ -69,12 +69,15 @@
     applyTheme();
 
     let textChoice = 'default';
-    try { textChoice = localStorage.getItem('kindling_text_size') === 'large' ? 'large' : 'default'; } catch (error) {}
+    try {
+        const stored = localStorage.getItem('kindling_text_size');
+        textChoice = stored === 'large' || stored === 'xlarge' ? stored : 'default';
+    } catch (error) {}
     function applyText() {
-        document.documentElement.dataset.text = textChoice === 'large' ? 'large' : '';
+        document.documentElement.dataset.text = textChoice === 'default' ? '' : textChoice;
         try {
-            if (textChoice === 'large') localStorage.setItem('kindling_text_size', 'large');
-            else localStorage.removeItem('kindling_text_size');
+            if (textChoice === 'default') localStorage.removeItem('kindling_text_size');
+            else localStorage.setItem('kindling_text_size', textChoice);
         } catch (error) {}
         $$('#textGroup [role=radio]').forEach(b => b.setAttribute('aria-checked', String(b.dataset.textChoice === textChoice)));
     }
