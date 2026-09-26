@@ -42,6 +42,29 @@
         S: 'works_with_people', E: 'leads_persuades', C: 'organizes_systems'
     };
 
+    // Connect Threads' first combined-mode build re-scores every real
+    // thread and runs full AI enrichment on every node, none of it
+    // cached yet - that first request can take 60-100+ seconds on a
+    // cold backend. Every request after it hits the cache and is
+    // instant, same as single-session loads already are - this is
+    // shown once per account, not on every combined-mode visit.
+    function renderLoadingCombined() {
+        if (layer) {
+            try {
+                layer.innerHTML = `
+                    <text text-anchor="middle" x="0" y="-10" fill="#f5c46a" font-size="20" font-weight="600">Building your combined career map</text>
+                    <text text-anchor="middle" x="0" y="20" fill="#a0aec0" font-size="14">This can take a minute the first time - it'll load instantly after that.</text>
+                `;
+            } catch (e) {}
+        }
+
+        panel.innerHTML = `
+            <p class="eyebrow">Career graph</p>
+            <h2 class="display">Combining your conversations</h2>
+            <p class="lede">Building your combined career map - this can take a minute the first time. Once it's ready, it'll load instantly from here on.</p>
+        `;
+    }
+
     function renderEmpty(message) {
         if (layer) {
             try { layer.innerHTML = ''; } catch (e) {}
@@ -72,6 +95,8 @@
         }
 
         try {
+
+            if (combined) renderLoadingCombined();
 
             const scopeParam = combined ? '&scope=all' : '';
             const response = await fetch(`${K.API_BASE_URL}/api/career-tree/${sessionId}?token=${encodeURIComponent(K.getAuthToken())}${scopeParam}`);
